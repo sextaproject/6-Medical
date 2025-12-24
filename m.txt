@@ -1,0 +1,30 @@
+uv venv
+source .venv/bin/activate
+
+uv pip install django djangorestframework psycopg2-binary django-cors-headers whitenoise
+uv pip install djangorestframework psycopg2-binary
+uv pip install django-cors-headers
+uv pip install whitenoise
+
+uv pip freeze > requirements.txt
+
+uv run -- python manage.py runserver
+uv run -- python manage.py runserver 8080
+uv run -- python manage.py migrate
+uv run -- python manage.py makemigrations
+
+uv run -- python manage.py import_drugs
+
+
+django-admin startproject SextaWeb .
+django-admin startapp Numbers 
+
+python manage.py migrate
+python manage.py runserver
+
+
+npm create vite@latest  -- --template react
+npm install react-router-dom
+
+
+npm run dev
