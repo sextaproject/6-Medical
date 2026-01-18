@@ -31,3 +31,10 @@ npm install react-router-dom
 
 
 npm run dev
+
+
+git init    
+git status
+git add .    
+git commit -m ""
+git push origin main                                           
