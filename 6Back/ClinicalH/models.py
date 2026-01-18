@@ -1,10 +1,9 @@
 from django.db import models
 from django.utils import timezone
+from django.contrib.auth.models import User
 
 
-class Patient(models.Model):
-    """Modelo de Paciente con toda la información clínica"""
-    
+class Patient(models.Model):    
     GENDER_CHOICES = [
         ('Masculino', 'Masculino'),
         ('Femenino', 'Femenino'),
@@ -101,10 +100,12 @@ class MedicalNote(models.Model):
     ]
     
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='medical_notes')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Creado por (Usuario)")
+
     note_type = models.CharField(max_length=20, choices=NOTE_TYPE_CHOICES, default='GENERAL')
     title = models.CharField(max_length=200, verbose_name="Título")
     content = models.TextField(verbose_name="Contenido")
-    doctor_name = models.CharField(max_length=200, verbose_name="Nombre del doctor")
+    doctor_name = models.CharField(max_length=200, verbose_name="Por:")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -123,6 +124,7 @@ class MedicationHistory(models.Model):
     
     medication = models.ForeignKey(Medication, on_delete=models.CASCADE, related_name='history')
     administered_at = models.DateTimeField(default=timezone.now)
+    administered_by_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='meds_given')
     administered_by = models.CharField(max_length=200, verbose_name="Administrado por")
     notes = models.TextField(blank=True, null=True)
     

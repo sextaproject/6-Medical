@@ -67,7 +67,7 @@ function Home(){
   const navigate = useNavigate();
   const [isSpinning, setIsSpinning] = useState(false);
   const handleClick = () => setIsSpinning(true);
-  const handleAnimationEnd = () => navigate('/menu');
+  const handleAnimationEnd = () => navigate('/login');
 
   return (
     <Content>

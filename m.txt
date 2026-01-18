@@ -5,6 +5,8 @@ uv pip install django djangorestframework psycopg2-binary django-cors-headers wh
 uv pip install djangorestframework psycopg2-binary
 uv pip install django-cors-headers
 uv pip install whitenoise
+uv pip install djangorestframework-simplejwt
+
 
 uv pip freeze > requirements.txt
 
@@ -12,8 +14,9 @@ uv run -- python manage.py runserver
 uv run -- python manage.py runserver 8080
 uv run -- python manage.py migrate
 uv run -- python manage.py makemigrations
+uv run -- python manage.py createsuperuser
 
-uv run -- python manage.py import_drugs
+uv run -- python manage.py createsuperuser
 
 
 django-admin startproject SextaWeb .
