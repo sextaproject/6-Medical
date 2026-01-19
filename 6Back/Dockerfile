@@ -31,25 +31,23 @@ RUN python manage.py collectstatic --noinput || true
 EXPOSE 8000
 
 # Create entrypoint script
-RUN echo '#!/bin/bash\n\
-set -e\n\
-\n\
-# Wait for PostgreSQL\n\
-echo "Waiting for PostgreSQL..."\n\
-while ! pg_isready -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER > /dev/null 2>&1; do\n\
-  echo "PostgreSQL is unavailable - sleeping"\n\
-  sleep 1\n\
-done\n\
-echo "PostgreSQL is up - executing command"\n\
-\n\
-# Run migrations\n\
-python manage.py migrate --noinput\n\
-\n\
-# Create superuser if it doesn\'t exist (optional)\n\
-# python manage.py setup_users || true\n\
-\n\
-# Execute command\n\
-exec "$@"' > /entrypoint.sh && chmod +x /entrypoint.sh
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo '' >> /entrypoint.sh && \
+    echo '# Wait for PostgreSQL' >> /entrypoint.sh && \
+    echo 'echo "Waiting for PostgreSQL..."' >> /entrypoint.sh && \
+    echo 'until pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" > /dev/null 2>&1; do' >> /entrypoint.sh && \
+    echo '  echo "PostgreSQL is unavailable - sleeping"' >> /entrypoint.sh && \
+    echo '  sleep 2' >> /entrypoint.sh && \
+    echo 'done' >> /entrypoint.sh && \
+    echo 'echo "PostgreSQL is up - executing command"' >> /entrypoint.sh && \
+    echo '' >> /entrypoint.sh && \
+    echo '# Run migrations' >> /entrypoint.sh && \
+    echo 'python manage.py migrate --noinput' >> /entrypoint.sh && \
+    echo '' >> /entrypoint.sh && \
+    echo '# Execute command' >> /entrypoint.sh && \
+    echo 'exec "$@"' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 
