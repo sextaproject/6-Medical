@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Change this if your Django server runs on a different port
-const baseURL = 'http://127.0.0.1:8000/api/';
+// Use environment variable for API URL, fallback to localhost for development
+const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/';
 
 const axiosInstance = axios.create({
     baseURL: baseURL,
@@ -33,7 +33,7 @@ axiosInstance.interceptors.response.use(
         const originalRequest = error.config;
 
         // If error is 401 and we haven't tried refreshing yet
-        if (error.response.status === 401 && !originalRequest._retry) {
+        if (error.response && error.response.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
             const refreshToken = localStorage.getItem('refresh_token');
 

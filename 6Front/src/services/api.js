@@ -1,13 +1,12 @@
-const API_BASE_URL = 'http://localhost:8000/api';
+import axiosInstance from '../api/axios';
 
-// Patient API
+// Patient API - Using authenticated axios instance
 export const patientApi = {
   // Get all patients
   getAll: async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/patients/`);
-      if (!response.ok) throw new Error('Error al obtener pacientes');
-      return await response.json();
+      const response = await axiosInstance.get('/patients/');
+      return response.data;
     } catch (error) {
       console.error('Error fetching patients:', error);
       throw error;
@@ -17,9 +16,8 @@ export const patientApi = {
   // Get single patient by ID
   getById: async (id) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/patients/${id}/`);
-      if (!response.ok) throw new Error('Error al obtener paciente');
-      return await response.json();
+      const response = await axiosInstance.get(`/patients/${id}/`);
+      return response.data;
     } catch (error) {
       console.error('Error fetching patient:', error);
       throw error;
@@ -29,20 +27,13 @@ export const patientApi = {
   // Create new patient
   create: async (patientData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/patients/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(patientData),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al crear paciente');
-      }
-      return await response.json();
+      const response = await axiosInstance.post('/patients/', patientData);
+      return response.data;
     } catch (error) {
       console.error('Error creating patient:', error);
+      if (error.response?.data) {
+        throw new Error(error.response.data.detail || error.response.data.message || 'Error al crear paciente');
+      }
       throw error;
     }
   },
@@ -50,17 +41,13 @@ export const patientApi = {
   // Update patient
   update: async (id, patientData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/patients/${id}/`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(patientData),
-      });
-      if (!response.ok) throw new Error('Error al actualizar paciente');
-      return await response.json();
+      const response = await axiosInstance.put(`/patients/${id}/`, patientData);
+      return response.data;
     } catch (error) {
       console.error('Error updating patient:', error);
+      if (error.response?.data) {
+        throw new Error(error.response.data.detail || 'Error al actualizar paciente');
+      }
       throw error;
     }
   },
@@ -68,13 +55,13 @@ export const patientApi = {
   // Delete patient
   delete: async (id) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/patients/${id}/`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('Error al eliminar paciente');
+      await axiosInstance.delete(`/patients/${id}/`);
       return true;
     } catch (error) {
       console.error('Error deleting patient:', error);
+      if (error.response?.data) {
+        throw new Error(error.response.data.detail || 'Error al eliminar paciente');
+      }
       throw error;
     }
   },
@@ -82,17 +69,13 @@ export const patientApi = {
   // Add medication to patient
   addMedication: async (patientId, medicationData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/patients/${patientId}/add_medication/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(medicationData),
-      });
-      if (!response.ok) throw new Error('Error al añadir medicación');
-      return await response.json();
+      const response = await axiosInstance.post(`/patients/${patientId}/add_medication/`, medicationData);
+      return response.data;
     } catch (error) {
       console.error('Error adding medication:', error);
+      if (error.response?.data) {
+        throw new Error(error.response.data.detail || 'Error al añadir medicación');
+      }
       throw error;
     }
   },
@@ -100,13 +83,13 @@ export const patientApi = {
   // Delete medication from patient
   deleteMedication: async (patientId, medicationId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/patients/${patientId}/medications/${medicationId}/`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) throw new Error('Error al eliminar medicación');
+      await axiosInstance.delete(`/medications/${medicationId}/`);
       return true;
     } catch (error) {
       console.error('Error deleting medication:', error);
+      if (error.response?.data) {
+        throw new Error(error.response.data.detail || 'Error al eliminar medicación');
+      }
       throw error;
     }
   },
@@ -114,38 +97,30 @@ export const patientApi = {
   // Add medical note
   addNote: async (patientId, noteData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/patients/${patientId}/add_note/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(noteData),
-      });
-      if (!response.ok) throw new Error('Error al añadir nota');
-      return await response.json();
+      const response = await axiosInstance.post(`/patients/${patientId}/add_note/`, noteData);
+      return response.data;
     } catch (error) {
       console.error('Error adding note:', error);
+      if (error.response?.data) {
+        throw new Error(error.response.data.detail || 'Error al añadir nota');
+      }
       throw error;
     }
   },
 };
 
-// Medication API
+// Medication API - Using authenticated axios instance
 export const medicationApi = {
   // Administer medication
   administer: async (medicationId, data) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/medications/${medicationId}/administer/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-      if (!response.ok) throw new Error('Error al administrar medicación');
-      return await response.json();
+      const response = await axiosInstance.post(`/medications/${medicationId}/administer/`, data);
+      return response.data;
     } catch (error) {
       console.error('Error administering medication:', error);
+      if (error.response?.data) {
+        throw new Error(error.response.data.detail || 'Error al administrar medicación');
+      }
       throw error;
     }
   },

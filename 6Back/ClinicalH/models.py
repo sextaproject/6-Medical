@@ -135,3 +135,23 @@ class MedicationHistory(models.Model):
     
     def __str__(self):
         return f"{self.medication.name} - {self.administered_at}"
+
+
+class NoteEditHistory(models.Model):
+    """Historial de ediciones de notas médicas para auditoría"""
+    
+    note = models.ForeignKey(MedicalNote, on_delete=models.CASCADE, related_name='edit_history')
+    edited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="Editado por")
+    edited_at = models.DateTimeField(default=timezone.now, verbose_name="Fecha de edición")
+    previous_content = models.TextField(verbose_name="Contenido anterior")
+    new_content = models.TextField(verbose_name="Contenido nuevo")
+    previous_title = models.CharField(max_length=200, verbose_name="Título anterior")
+    new_title = models.CharField(max_length=200, verbose_name="Título nuevo")
+    
+    class Meta:
+        verbose_name = "Historial de Edición de Nota"
+        verbose_name_plural = "Historiales de Edición de Notas"
+        ordering = ['-edited_at']
+    
+    def __str__(self):
+        return f"Edición de {self.note.title} por {self.edited_by} el {self.edited_at}"

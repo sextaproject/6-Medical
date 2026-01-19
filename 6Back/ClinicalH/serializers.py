@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Patient, Medication, MedicalNote, MedicationHistory
+from .models import Patient, Medication, MedicalNote, MedicationHistory, NoteEditHistory
 
 
 class MedicationSerializer(serializers.ModelSerializer):
@@ -8,13 +8,29 @@ class MedicationSerializer(serializers.ModelSerializer):
         model = Medication
         fields = ['id', 'name', 'dose', 'route', 'freq', 'status', 'created_at', 'updated_at']
 
+class NoteEditHistorySerializer(serializers.ModelSerializer):
+    """Serializer for note edit history"""
+    edited_by_username = serializers.CharField(source='edited_by.username', read_only=True)
+    
+    class Meta:
+        model = NoteEditHistory
+        fields = [
+            'id', 'edited_by_username', 'edited_at', 
+            'previous_title', 'new_title', 'previous_content', 'new_content'
+        ]
+
+
 class MedicalNoteSerializer(serializers.ModelSerializer):
-    created_by_id = serializers.PrimaryKeyRelatedField(source='created_by', read_only=True)
+    created_by_id = serializers.IntegerField(source='created_by.id', read_only=True)
+    created_by_username = serializers.CharField(source='created_by.username', read_only=True)
+    edit_history = NoteEditHistorySerializer(many=True, read_only=True)
+    
     class Meta:
         model = MedicalNote
         fields = [
             'id', 'note_type', 'title', 'content', 
-            'doctor_name', 'created_by_id','created_at', 'updated_at'
+            'doctor_name', 'created_by_id', 'created_by_username',
+            'created_at', 'updated_at', 'edit_history'
         ]
 
 class MedicationHistorySerializer(serializers.ModelSerializer):
@@ -81,4 +97,3 @@ class PatientCreateSerializer(serializers.ModelSerializer):
             next_room = 1 if not last_patient else (int(last_patient.room or 0) + 1)
             validated_data['room'] = str(next_room)
         return super().create(validated_data)
-

@@ -28,16 +28,46 @@ export default function Login() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
+        setError('');
         try {
-            const response = await axiosInstance.post('token/', formData);          
-            localStorage.setItem('access_token', response.data.access);
-            localStorage.setItem('refresh_token', response.data.refresh);
-            axiosInstance.defaults.headers['Authorization'] = 'Bearer ' + response.data.access;
+            // Use plain axios for login to avoid interceptor issues
+            const response = await axiosInstance.post('token/', formData, {
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
             
-            navigate('/clinical');
+            if (response.data.access && response.data.refresh) {
+                localStorage.setItem('access_token', response.data.access);
+                localStorage.setItem('refresh_token', response.data.refresh);
+                // Store user info if available
+                if (response.data.user) {
+                    localStorage.setItem('user_info', JSON.stringify(response.data.user));
+                }
+                axiosInstance.defaults.headers['Authorization'] = 'Bearer ' + response.data.access;
+                
+                navigate('/clinical');
+            } else {
+                setError('Respuesta del servidor inválida');
+            }
         } catch (err) {
-            console.error(err);
-            setError('Usuario o contraseña incorrectos');
+            console.error('Login error:', err);
+            if (err.response) {
+                // Server responded with error
+                if (err.response.status === 401) {
+                    setError('Usuario o contraseña incorrectos');
+                } else if (err.response.status === 400) {
+                    setError(err.response.data.detail || 'Datos inválidos');
+                } else {
+                    setError(`Error del servidor: ${err.response.status}`);
+                }
+            } else if (err.request) {
+                // Request was made but no response received
+                setError('No se pudo conectar al servidor. Verifique que el servidor esté ejecutándose.');
+            } else {
+                // Something else happened
+                setError('Error inesperado. Por favor intente nuevamente.');
+            }
         } finally {
             setLoading(false);
         }

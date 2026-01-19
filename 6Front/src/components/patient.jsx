@@ -23,6 +23,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import HomeIcon from '@mui/icons-material/Home';
 import Tooltip from '@mui/material/Tooltip';
+import EditIcon from '@mui/icons-material/Edit';
 
 // Patient avatar images
 import maleAvatar1 from '../assets/m1.png';
@@ -116,6 +117,10 @@ function ClinicalDashboard() {
   const [showAddMedicine, setShowAddMedicine] = useState(false);
   const [newMedicine, setNewMedicine] = useState({ name: '', dose: '', route: 'VO', freq: '' });
   const [showDischargeConfirm, setShowDischargeConfirm] = useState(false);
+  const [editingNote, setEditingNote] = useState(null);
+  const [editNoteContent, setEditNoteContent] = useState('');
+  const [editNoteTitle, setEditNoteTitle] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
 
   // --- API Calls ---
 
@@ -152,6 +157,16 @@ function ClinicalDashboard() {
 
   useEffect(() => {
     if (id) fetchPatientData();
+    
+    // Get current user info
+    const userInfo = localStorage.getItem('user_info');
+    if (userInfo) {
+      try {
+        setCurrentUser(JSON.parse(userInfo));
+      } catch (error) {
+        console.error('Error parsing user_info:', error);
+      }
+    }
   }, [id]);
 
   useEffect(() => {
@@ -317,6 +332,76 @@ function ClinicalDashboard() {
         addToSessionHistory('NOTE', `Paciente dado de alta`);
     } catch (error) {
         alert("Error al dar de alta.");
+    }
+  };
+
+  // Check if user can edit a note
+  const canEditNote = (note) => {
+    if (!currentUser) return false;
+    
+    // Superuser (willarevalo) can edit all notes
+    if (currentUser.is_superuser) return true;
+    
+    // Read-only users cannot edit
+    if (currentUser.is_readonly) return false;
+    
+    // Nurses can only edit their own notes within 48 hours
+    if (currentUser.is_nurse) {
+      // Check if note was created by current user
+      // Handle both cases: created_by_id (number) or created_by (object with id)
+      const noteCreatorId = note.created_by_id || (note.created_by && note.created_by.id) || note.created_by;
+      if (noteCreatorId !== currentUser.id) return false;
+      
+      // Check if note is within 48 hours
+      const noteDate = new Date(note.created_at);
+      const now = new Date();
+      const hoursDiff = (now - noteDate) / (1000 * 60 * 60);
+      return hoursDiff <= 48;
+    }
+    
+    return false;
+  };
+
+  const handleStartEditNote = (note) => {
+    setEditingNote(note.id);
+    setEditNoteTitle(note.title);
+    setEditNoteContent(note.content);
+  };
+
+  const handleCancelEditNote = () => {
+    setEditingNote(null);
+    setEditNoteTitle('');
+    setEditNoteContent('');
+  };
+
+  const handleSaveEditNote = async () => {
+    if (!editingNote) return;
+    
+    try {
+      const response = await axiosInstance.patch(`notes/${editingNote}/`, {
+        title: editNoteTitle,
+        content: editNoteContent
+      });
+      
+      // Update the note in local state
+      setPatient(prev => ({
+        ...prev,
+        medicalNotes: prev.medicalNotes.map(n => 
+          n.id === editingNote ? response.data : n
+        )
+      }));
+      
+      setEditingNote(null);
+      setEditNoteTitle('');
+      setEditNoteContent('');
+      addToSessionHistory('NOTE', 'Nota actualizada exitosamente');
+    } catch (error) {
+      console.error('Error updating note:', error);
+      if (error.response?.status === 403) {
+        alert('No tiene permisos para editar esta nota.');
+      } else {
+        alert('Error al actualizar la nota.');
+      }
     }
   };
 
@@ -613,17 +698,65 @@ function ClinicalDashboard() {
                     {patient.medicalNotes.length === 0 ? <Typography>No hay notas registradas.</Typography> : (
                         <List>
                             {patient.medicalNotes.map(n => (
-                                <ListItem key={n.id} divider>
-                                    <ListItemText 
-                                        primary={n.title} 
-                                        secondary={
-                                            <>
-                                                <Typography variant="caption" display="block">{new Date(n.created_at).toLocaleString()}</Typography>
-                                                <Typography variant="body2">{n.content}</Typography>
-                                                <Typography variant="caption" color="primary">Dr. {n.doctor_name}</Typography>
-                                            </>
-                                        } 
-                                    />
+                                <ListItem 
+                                    key={n.id} 
+                                    divider
+                                    secondaryAction={
+                                        canEditNote(n) ? (
+                                            <IconButton 
+                                                edge="end" 
+                                                onClick={() => handleStartEditNote(n)}
+                                                sx={{ color: 'primary.main' }}
+                                            >
+                                                <EditIcon />
+                                            </IconButton>
+                                        ) : null
+                                    }
+                                >
+                                    {editingNote === n.id ? (
+                                        <Box sx={{ width: '100%' }}>
+                                            <TextField
+                                                fullWidth
+                                                label="Título"
+                                                value={editNoteTitle}
+                                                onChange={(e) => setEditNoteTitle(e.target.value)}
+                                                sx={{ mb: 2 }}
+                                            />
+                                            <TextField
+                                                fullWidth
+                                                multiline
+                                                rows={4}
+                                                label="Contenido"
+                                                value={editNoteContent}
+                                                onChange={(e) => setEditNoteContent(e.target.value)}
+                                                sx={{ mb: 2 }}
+                                            />
+                                            <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                                                <Button onClick={handleCancelEditNote} variant="outlined">
+                                                    Cancelar
+                                                </Button>
+                                                <Button onClick={handleSaveEditNote} variant="contained" color="primary">
+                                                    Guardar
+                                                </Button>
+                                            </Box>
+                                        </Box>
+                                    ) : (
+                                        <ListItemText 
+                                            primary={n.title} 
+                                            secondary={
+                                                <>
+                                                    <Typography variant="caption" display="block">{new Date(n.created_at).toLocaleString()}</Typography>
+                                                    <Typography variant="body2">{n.content}</Typography>
+                                                    <Typography variant="caption" color="primary">Dr. {n.created_by_username || n.doctor_name}</Typography>
+                                                    {n.edit_history && n.edit_history.length > 0 && (
+                                                        <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
+                                                            Editado {n.edit_history.length} vez(es)
+                                                        </Typography>
+                                                    )}
+                                                </>
+                                            } 
+                                        />
+                                    )}
                                 </ListItem>
                             ))}
                         </List>

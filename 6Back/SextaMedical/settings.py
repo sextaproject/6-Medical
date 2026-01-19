@@ -1,13 +1,17 @@
 import os
 from pathlib import Path
 from datetime import timedelta
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-SECRET_KEY = 'django-insecure-pn&8gvtrm-n%1+8!z_1da+-jk83o+0k%-5k1kl7(32&yp+jxkk'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-pn&8gvtrm-n%1+8!z_1da+-jk83o+0k%-5k1kl7(32&yp+jxkk')
 
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
 
@@ -41,12 +45,10 @@ MIDDLEWARE = [
 ]
 
 # CORS Configuration - Allow React frontend
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+CORS_ALLOWED_ORIGINS = os.getenv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:80,http://localhost'
+).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -96,9 +98,9 @@ if POSTGRES_DB:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': POSTGRES_DB,
-            'USER': os.getenv('POSTGRES_USER', 'postgres'),
-            'PASSWORD': os.getenv('POSTGRES_PASSWORD', ''),
+            'NAME': os.getenv('POSTGRES_DB', 'sexta_medical_db'),
+            'USER': os.getenv('POSTGRES_USER', 'sexta_user'),
+            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'Ars0.1.2.1'),
             'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
             'PORT': os.getenv('POSTGRES_PORT', '5432'),
         }

@@ -38,3 +38,7 @@ git status
 git add .    
 git commit -m ""
 git push origin main                                           
+
+
+docker-compose up --build
+docker-compose exec backend python manage.py setup_users

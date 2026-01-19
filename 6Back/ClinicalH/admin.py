@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Patient, Medication, MedicalNote, MedicationHistory
+from .models import Patient, Medication, MedicalNote, MedicationHistory, NoteEditHistory
 
 
 class MedicationInline(admin.TabularInline):
@@ -56,3 +56,11 @@ class MedicalNoteAdmin(admin.ModelAdmin):
 class MedicationHistoryAdmin(admin.ModelAdmin):
     list_display = ['medication', 'administered_at', 'administered_by']
     list_filter = ['administered_at']
+
+
+@admin.register(NoteEditHistory)
+class NoteEditHistoryAdmin(admin.ModelAdmin):
+    list_display = ['note', 'edited_by', 'edited_at']
+    list_filter = ['edited_at']
+    search_fields = ['note__title', 'edited_by__username']
+    readonly_fields = ['note', 'edited_by', 'edited_at', 'previous_title', 'new_title', 'previous_content', 'new_content']

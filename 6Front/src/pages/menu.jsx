@@ -261,18 +261,33 @@ function Menu() {
     );
   }, [search, patients, activePatients]);
 
-  const getUsernameFromToken = () => {
-    const token = localStorage.getItem('access_token');
-    if (!token) return 'usuario';
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.username || payload.email || payload.user || (payload.user_id ? `usuario ${payload.user_id}` : 'usuario');
-    } catch (error) {
-      return 'usuario';
+  const getUsername = () => {
+    // First try to get from user_info stored during login
+    const userInfo = localStorage.getItem('user_info');
+    if (userInfo) {
+      try {
+        const user = JSON.parse(userInfo);
+        return user.username || 'usuario';
+      } catch (error) {
+        console.error('Error parsing user_info:', error);
+      }
     }
+    
+    // Fallback: try to parse JWT token (not recommended, but as backup)
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.username || payload.email || (payload.user_id ? `usuario ${payload.user_id}` : 'usuario');
+      } catch (error) {
+        console.error('Error parsing token:', error);
+      }
+    }
+    
+    return 'usuario';
   };
 
-  const username = getUsernameFromToken();
+  const username = getUsername();
 
   const handleLogout = () => {
     localStorage.removeItem('access_token');
