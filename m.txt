@@ -42,3 +42,13 @@ git push origin main
 
 docker-compose up --build
 docker-compose exec backend python manage.py setup_users
+
+Step 1: Backup local database
+cd 6Back./backup_database.sh
+
+Step 3: Restore patient data
+# On DigitalOcean droplet, copy backup file and restore:
+psql -U sexta_user -d sexta_medical_db -h <your-db-host> < backup_file.sql
+
+# Or using Docker (if using Docker on DigitalOcean):
+docker-compose exec -T db psql -U sexta_user -d sexta_medical_db < backup_file.sql

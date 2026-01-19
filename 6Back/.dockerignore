@@ -66,3 +66,6 @@ htmlcov/
 Dockerfile
 .dockerignore
 docker-compose.yml
+
+# Keep entrypoint.sh - it's needed!
+!entrypoint.sh

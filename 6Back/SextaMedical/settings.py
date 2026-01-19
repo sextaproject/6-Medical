@@ -93,19 +93,27 @@ WSGI_APPLICATION = 'SextaMedical.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-POSTGRES_DB = os.getenv('POSTGRES_DB')
-if POSTGRES_DB:
+# Database configuration - Always use PostgreSQL in Docker
+POSTGRES_DB = os.getenv('POSTGRES_DB', 'sexta_medical_db')
+POSTGRES_USER = os.getenv('POSTGRES_USER', 'sexta_user')
+POSTGRES_PASSWORD = os.getenv('POSTGRES_PASSWORD', 'Ars0.1.2.1')
+POSTGRES_HOST = os.getenv('POSTGRES_HOST', 'localhost')
+POSTGRES_PORT = os.getenv('POSTGRES_PORT', '5432')
+
+# Use PostgreSQL if POSTGRES_HOST is set (Docker) or POSTGRES_DB env var exists
+if POSTGRES_HOST != 'localhost' or os.getenv('POSTGRES_DB'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('POSTGRES_DB', 'sexta_medical_db'),
-            'USER': os.getenv('POSTGRES_USER', 'sexta_user'),
-            'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'Ars0.1.2.1'),
-            'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
-            'PORT': os.getenv('POSTGRES_PORT', '5432'),
+            'NAME': POSTGRES_DB,
+            'USER': POSTGRES_USER,
+            'PASSWORD': POSTGRES_PASSWORD,
+            'HOST': POSTGRES_HOST,
+            'PORT': POSTGRES_PORT,
         }
     }
 else:
+    # Fallback to SQLite only for local development without Docker
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -148,7 +156,12 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Media files (user uploads)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

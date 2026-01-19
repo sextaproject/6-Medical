@@ -2,8 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { 
   Typography, styled, Paper, Container, Box, Grid, Button, TextField, 
-  Chip, Stack, Divider, List, ListItem, ListItemText, Avatar, MenuItem, 
-  IconButton, Modal, Fade, Backdrop 
+  Chip, Stack, Divider, List, ListItem, ListItemText, Avatar, 
+  IconButton, Modal, Fade, Backdrop, InputAdornment, CircularProgress
 } from '@mui/material';
 import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
@@ -14,6 +14,8 @@ import ArrowBackIosNewIcon from '@mui/icons-material/ArrowBackIosNew';
 import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import CloseIcon from '@mui/icons-material/Close';
+import PersonIcon from '@mui/icons-material/Person';
+import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import HistoryIcon from '@mui/icons-material/History';
@@ -121,6 +123,9 @@ function ClinicalDashboard() {
   const [editNoteContent, setEditNoteContent] = useState('');
   const [editNoteTitle, setEditNoteTitle] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
+  const [showEditPatientModal, setShowEditPatientModal] = useState(false);
+  const [editingPatient, setEditingPatient] = useState(null);
+  const [updatingPatient, setUpdatingPatient] = useState(false);
 
   // --- API Calls ---
 
@@ -134,6 +139,7 @@ function ClinicalDashboard() {
       setPatient({
         id: data.id,
         name: data.nombre,
+        fechaNacimiento: data.fecha_nacimiento,
         age: data.edad,
         diagnosis: data.diagnosticos || 'Sin Diagnóstico',
         admissionDate: data.fecha_ingreso,
@@ -257,13 +263,42 @@ function ClinicalDashboard() {
   const handleSaveNote = async () => {
     if (!note && !vitals.bp.sbp) return;
     
+    // Validate word count
+    const wordCount = note.trim() ? note.trim().split(/\s+/).length : 0;
+    if (wordCount > 2000) {
+      alert('La nota no puede exceder 2000 palabras. Por favor, reduzca el contenido.');
+      return;
+    }
+    
+    // Validate vital signs ranges
+    if (vitals.bp.sbp && (parseInt(vitals.bp.sbp) < 0 || parseInt(vitals.bp.sbp) > 300)) {
+      alert('La presión arterial sistólica debe estar entre 0 y 300 mmHg.');
+      return;
+    }
+    if (vitals.bp.dbp && (parseInt(vitals.bp.dbp) < 0 || parseInt(vitals.bp.dbp) > 200)) {
+      alert('La presión arterial diastólica debe estar entre 0 y 200 mmHg.');
+      return;
+    }
+    if (vitals.hr && (parseInt(vitals.hr) < 0 || parseInt(vitals.hr) > 220)) {
+      alert('La frecuencia cardíaca debe estar entre 0 y 220 bpm.');
+      return;
+    }
+    if (vitals.fr && (parseInt(vitals.fr) < 0 || parseInt(vitals.fr) > 60)) {
+      alert('La frecuencia respiratoria debe estar entre 0 y 60 rpm.');
+      return;
+    }
+    if (vitals.temp && (parseFloat(vitals.temp) < 30 || parseFloat(vitals.temp) > 45)) {
+      alert('La temperatura debe estar entre 30 y 45°C.');
+      return;
+    }
+    
     // Construct content string
     const vitalsParts = [];
-    if (vitals.bp.sbp || vitals.bp.dbp) vitalsParts.push(`PA:${vitals.bp.sbp}/${vitals.bp.dbp}`);
+    if (vitals.bp.sbp || vitals.bp.dbp) vitalsParts.push(`PA:${vitals.bp.sbp || ''}/${vitals.bp.dbp || ''}`);
     if (vitals.hr) vitalsParts.push(`FC:${vitals.hr}`);
     if (vitals.fr) vitalsParts.push(`FR:${vitals.fr}`);
     if (vitals.temp) vitalsParts.push(`Temp:${vitals.temp}`);
-    const fullContent = `${vitalsParts.join(' ')}\n${note}`;
+    const fullContent = `${vitalsParts.join(' ')}\n${note}`.trim();
 
     try {
         const response = await axiosInstance.post(`patients/${patient.id}/add_note/`, {
@@ -288,12 +323,26 @@ function ClinicalDashboard() {
   };
 
   const handleAddMedicine = async () => {
+    // Validation
+    if (!newMedicine.name || !newMedicine.name.trim()) {
+      alert('El nombre del medicamento es requerido.');
+      return;
+    }
+    if (!newMedicine.dose || !newMedicine.dose.trim()) {
+      alert('La dosis es requerida.');
+      return;
+    }
+    if (!newMedicine.freq || !newMedicine.freq.trim()) {
+      alert('La frecuencia es requerida.');
+      return;
+    }
+    
     try {
         const response = await axiosInstance.post(`patients/${patient.id}/add_medication/`, {
-            name: newMedicine.name,
-            dose: newMedicine.dose,
+            name: newMedicine.name.trim(),
+            dose: newMedicine.dose.trim(),
             route: newMedicine.route,
-            freq: newMedicine.freq,
+            freq: newMedicine.freq.trim(),
             status: 'due'
         });
         
@@ -412,6 +461,134 @@ function ClinicalDashboard() {
     }, ...prev]);
   };
 
+  // Calculate age from date of birth
+  const calculateAge = (fechaNacimiento) => {
+    if (!fechaNacimiento) return '';
+    const birthDate = new Date(fechaNacimiento);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age.toString();
+  };
+
+  // Handle edit patient info
+  const handleEditPatientOpen = async () => {
+    try {
+      // Fetch full patient data
+      const response = await axiosInstance.get(`patients/${patient.id}/`);
+      const data = response.data;
+      
+      setEditingPatient({
+        nombre: data.nombre || '',
+        fechaNacimiento: data.fecha_nacimiento || '',
+        edad: data.edad ? data.edad.toString() : '',
+        genero: data.genero || 'Masculino',
+        cc: data.cc || '',
+        eps: data.eps || '',
+        alergias: data.alergias || '',
+        diagnosticos: data.diagnosticos || '',
+        direccion: data.direccion || '',
+        nombreAcudiente: data.nombre_acudiente || '',
+        telefono: data.telefono_acudiente || '',
+        enfermedadesPrevias: data.enfermedades_previas || '',
+        cirugias: data.cirugias || '',
+      });
+      setShowEditPatientModal(true);
+    } catch (err) {
+      console.error('Error fetching patient data:', err);
+      alert('Error al cargar datos del paciente.');
+    }
+  };
+
+  const handleEditPatientChange = (field) => (e) => {
+    const value = e.target.value;
+    setEditingPatient(prev => {
+      const updated = { ...prev, [field]: value };
+      // Auto-calculate age when fechaNacimiento changes
+      if (field === 'fechaNacimiento' && value) {
+        updated.edad = calculateAge(value);
+      }
+      return updated;
+    });
+  };
+
+  const handleUpdatePatient = async () => {
+    if (!editingPatient) return;
+    
+    // Validation
+    if (!editingPatient.nombre || !editingPatient.nombre.trim()) {
+      alert('El nombre completo es requerido.');
+      return;
+    }
+    if (!editingPatient.cc || editingPatient.cc.length < 7 || editingPatient.cc.length > 20) {
+      alert('La cédula de ciudadanía es requerida (7-20 dígitos).');
+      return;
+    }
+    if (!editingPatient.fechaNacimiento && (!editingPatient.edad || parseInt(editingPatient.edad) < 0 || parseInt(editingPatient.edad) > 150)) {
+      alert('Debe proporcionar fecha de nacimiento o edad válida (0-150 años).');
+      return;
+    }
+    if (editingPatient.edad && (parseInt(editingPatient.edad) < 0 || parseInt(editingPatient.edad) > 150)) {
+      alert('La edad debe estar entre 0 y 150 años.');
+      return;
+    }
+    if (!editingPatient.eps || !editingPatient.eps.trim()) {
+      alert('La EPS es requerida.');
+      return;
+    }
+    
+    setUpdatingPatient(true);
+    
+    const payload = {
+      nombre: editingPatient.nombre.trim(),
+      cc: editingPatient.cc,
+      fecha_nacimiento: editingPatient.fechaNacimiento || null,
+      edad: editingPatient.edad ? parseInt(editingPatient.edad) : null,
+      genero: editingPatient.genero,
+      direccion: editingPatient.direccion?.trim() || '',
+      eps: editingPatient.eps.trim(),
+      alergias: editingPatient.alergias?.trim() || '',
+      diagnosticos: editingPatient.diagnosticos?.trim() || '',
+      enfermedades_previas: editingPatient.enfermedadesPrevias?.trim() || '',
+      cirugias: editingPatient.cirugias?.trim() || '',
+      nombre_acudiente: editingPatient.nombreAcudiente?.trim() || '',
+      telefono_acudiente: editingPatient.telefono || '',
+    };
+
+    try {
+      const response = await axiosInstance.patch(`patients/${patient.id}/`, payload);
+      
+      // Update patient in local state
+      setPatient(prev => ({
+        ...prev,
+        name: response.data.nombre,
+        fechaNacimiento: response.data.fecha_nacimiento,
+        age: response.data.edad,
+        cc: response.data.cc,
+        eps: response.data.eps,
+        genero: response.data.genero,
+        allergies: response.data.alergias,
+        diagnosis: response.data.diagnosticos,
+      }));
+      
+      setShowEditPatientModal(false);
+      setEditingPatient(null);
+      addToSessionHistory('INFO', `Información del paciente actualizada por ${currentUser?.username || 'usuario'}`);
+    } catch (err) {
+      console.error('Error updating patient:', err);
+      if (err.response?.status === 403) {
+        alert('No tiene permisos para editar pacientes.');
+      } else {
+        alert(err.response?.data?.detail || 'Error al actualizar paciente.');
+      }
+    } finally {
+      setUpdatingPatient(false);
+    }
+  };
+
   const getDaysAdmitted = (dateString) => {
     if (!dateString) return 0;
     const start = new Date(dateString);
@@ -497,14 +674,66 @@ function ClinicalDashboard() {
 
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between" sx={{ mt: 2 }}>
             <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar src={genderMeta.avatar} sx={{ width: 74, height: 74, border: '3px solid rgba(255,255,255,0.5)' }} />
-              <Box>
+              {currentUser?.is_superuser ? (
+                <Tooltip title="Hacer clic para editar información del paciente">
+                  <Box
+                    onClick={handleEditPatientOpen}
+                    sx={{
+                      position: 'relative',
+                      cursor: 'pointer',
+                      '&:hover .edit-overlay': {
+                        opacity: 1,
+                      },
+                      '&:hover .avatar-border': {
+                        borderColor: 'rgba(255,255,255,0.8)',
+                        boxShadow: '0 0 0 2px rgba(59, 130, 246, 0.5)',
+                      },
+                    }}
+                  >
+                    <Avatar 
+                      src={genderMeta.avatar} 
+                      className="avatar-border"
+                      sx={{ 
+                        width: 74, 
+                        height: 74, 
+                        border: '3px solid rgba(255,255,255,0.5)',
+                        transition: 'all 0.3s ease',
+                      }} 
+                    />
+                    <Box
+                      className="edit-overlay"
+                      sx={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        borderRadius: '50%',
+                        bgcolor: 'rgba(59, 130, 246, 0.7)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: 0,
+                        transition: 'opacity 0.3s ease',
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <EditIcon sx={{ color: 'white', fontSize: 28 }} />
+                    </Box>
+                  </Box>
+                </Tooltip>
+              ) : (
+                <Avatar src={genderMeta.avatar} sx={{ width: 74, height: 74, border: '3px solid rgba(255,255,255,0.5)' }} />
+              )}
+              <Box sx={{ flex: 1 }}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Typography variant="h6" fontWeight={700}>Paciente</Typography>
                   {patient.isDischarged && <Chip label="DADO DE ALTA" sx={{ bgcolor: '#10b981', color: 'white', fontWeight: 'bold' }} />}
                 </Stack>
                 <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                  EDAD: {patient.age} años • CAMA: {patient.room || 'N/A'} • CC: {patient.cc} • EPS: {patient.eps}
+                  {patient.fechaNacimiento ? `Nacimiento: ${new Date(patient.fechaNacimiento).toLocaleDateString('es-CO')} • ` : ''}
+                  {patient.age ? `EDAD: ${patient.age} años • ` : ''}
+                  CAMA: {patient.room || 'N/A'} • CC: {patient.cc || 'N/A'} • EPS: {patient.eps}
                 </Typography>
                 <Chip label={patient.diagnosis} variant="outlined" size="small" sx={{ borderColor: 'rgba(255,255,255,0.6)', color: '#fff', fontWeight: 600, mt: 1 }} />
               </Box>
@@ -546,17 +775,128 @@ function ClinicalDashboard() {
               <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={12} sm={6}>
                   <Stack direction="row" spacing={0.5} alignItems="center">
-                    <TextField label="PAS" size="small" sx={{ width: 70 }} value={vitals.bp.sbp} onChange={(e) => setVitals({...vitals, bp: { ...vitals.bp, sbp: e.target.value }})} InputProps={{ sx: { borderRadius: '12px' } }} />
+                    <TextField 
+                      label="PAS" 
+                      size="small" 
+                      type="number"
+                      sx={{ width: 70 }} 
+                      value={vitals.bp.sbp} 
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '');
+                        if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 300)) {
+                          setVitals({...vitals, bp: { ...vitals.bp, sbp: value }});
+                        }
+                      }}
+                      InputProps={{ 
+                        sx: { borderRadius: '12px' },
+                        inputProps: { min: 0, max: 300, step: 1 }
+                      }}
+                      error={vitals.bp.sbp && (parseInt(vitals.bp.sbp) < 0 || parseInt(vitals.bp.sbp) > 300)}
+                      helperText={vitals.bp.sbp && (parseInt(vitals.bp.sbp) < 0 || parseInt(vitals.bp.sbp) > 300) ? 'Rango: 0-300' : ''}
+                    />
                     <Typography>/</Typography>
-                    <TextField label="PAD" size="small" sx={{ width: 70 }} value={vitals.bp.dbp} onChange={(e) => setVitals({...vitals, bp: { ...vitals.bp, dbp: e.target.value }})} InputProps={{ sx: { borderRadius: '12px' } }} />
+                    <TextField 
+                      label="PAD" 
+                      size="small" 
+                      type="number"
+                      sx={{ width: 70 }} 
+                      value={vitals.bp.dbp} 
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '');
+                        if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 200)) {
+                          setVitals({...vitals, bp: { ...vitals.bp, dbp: value }});
+                        }
+                      }}
+                      InputProps={{ 
+                        sx: { borderRadius: '12px' },
+                        inputProps: { min: 0, max: 200, step: 1 }
+                      }}
+                      error={vitals.bp.dbp && (parseInt(vitals.bp.dbp) < 0 || parseInt(vitals.bp.dbp) > 200)}
+                      helperText={vitals.bp.dbp && (parseInt(vitals.bp.dbp) < 0 || parseInt(vitals.bp.dbp) > 200) ? 'Rango: 0-200' : ''}
+                    />
                   </Stack>
                 </Grid>
-                <Grid item xs={6} sm={2}><TextField label="FC" size="small" value={vitals.hr} onChange={(e) => setVitals({...vitals, hr: e.target.value})} InputProps={{ sx: { borderRadius: '12px' } }} /></Grid>
-                <Grid item xs={6} sm={2}><TextField label="FR" size="small" value={vitals.fr} onChange={(e) => setVitals({...vitals, fr: e.target.value})} InputProps={{ sx: { borderRadius: '12px' } }} /></Grid>
-                <Grid item xs={6} sm={2}><TextField label="Temp" size="small" value={vitals.temp} onChange={(e) => setVitals({...vitals, temp: e.target.value})} InputProps={{ sx: { borderRadius: '12px' } }} /></Grid>
+                <Grid item xs={6} sm={2}>
+                  <TextField 
+                    label="FC" 
+                    size="small" 
+                    type="number"
+                    value={vitals.hr} 
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 220)) {
+                        setVitals({...vitals, hr: value});
+                      }
+                    }}
+                    InputProps={{ 
+                      sx: { borderRadius: '12px' },
+                      inputProps: { min: 0, max: 220, step: 1 }
+                    }}
+                    error={vitals.hr && (parseInt(vitals.hr) < 0 || parseInt(vitals.hr) > 220)}
+                    helperText={vitals.hr && (parseInt(vitals.hr) < 0 || parseInt(vitals.hr) > 220) ? 'Rango: 0-220' : ''}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={2}>
+                  <TextField 
+                    label="FR" 
+                    size="small" 
+                    type="number"
+                    value={vitals.fr} 
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, '');
+                      if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 60)) {
+                        setVitals({...vitals, fr: value});
+                      }
+                    }}
+                    InputProps={{ 
+                      sx: { borderRadius: '12px' },
+                      inputProps: { min: 0, max: 60, step: 1 }
+                    }}
+                    error={vitals.fr && (parseInt(vitals.fr) < 0 || parseInt(vitals.fr) > 60)}
+                    helperText={vitals.fr && (parseInt(vitals.fr) < 0 || parseInt(vitals.fr) > 60) ? 'Rango: 0-60' : ''}
+                  />
+                </Grid>
+                <Grid item xs={6} sm={2}>
+                  <TextField 
+                    label="Temp" 
+                    size="small" 
+                    type="number"
+                    value={vitals.temp} 
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^\d.]/g, '');
+                      if (value === '' || (parseFloat(value) >= 30 && parseFloat(value) <= 45)) {
+                        setVitals({...vitals, temp: value});
+                      }
+                    }}
+                    InputProps={{ 
+                      sx: { borderRadius: '12px' },
+                      inputProps: { min: 30, max: 45, step: 0.1 }
+                    }}
+                    error={vitals.temp && (parseFloat(vitals.temp) < 30 || parseFloat(vitals.temp) > 45)}
+                    helperText={vitals.temp && (parseFloat(vitals.temp) < 30 || parseFloat(vitals.temp) > 45) ? 'Rango: 30-45°C' : ''}
+                  />
+                </Grid>
               </Grid>
 
-              <TextField label="Nota de evolución" multiline rows={4} fullWidth placeholder="Escribe la valoración clínica..." value={note} onChange={(e) => setNote(e.target.value)} sx={{ mb: 2 }} InputProps={{ sx: { borderRadius: '12px' } }} />
+              <TextField 
+                label="Nota de evolución" 
+                multiline 
+                rows={4} 
+                fullWidth 
+                placeholder="Escribe la valoración clínica..." 
+                value={note} 
+                onChange={(e) => {
+                  const text = e.target.value;
+                  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+                  if (wordCount <= 2000) {
+                    setNote(text);
+                  }
+                }}
+                sx={{ mb: 2 }} 
+                InputProps={{ sx: { borderRadius: '12px' } }}
+                helperText={`${note.trim() ? note.trim().split(/\s+/).length : 0} / 2000 palabras`}
+                error={note.trim() && note.trim().split(/\s+/).length > 2000}
+              />
               
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 4 }}>
                 <ActionButton onClick={handleSaveNote} startIcon={<SaveIcon />}>Guardar</ActionButton>
@@ -628,10 +968,54 @@ function ClinicalDashboard() {
             <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 400, bgcolor: 'background.paper', borderRadius: 4, p: 4 }}>
                 <Typography variant="h6" mb={2}>Agregar Medicamento</Typography>
                 <Stack spacing={2}>
-                    <TextField label="Nombre" fullWidth value={newMedicine.name} onChange={(e) => setNewMedicine({...newMedicine, name: e.target.value})} />
-                    <TextField label="Dosis" fullWidth value={newMedicine.dose} onChange={(e) => setNewMedicine({...newMedicine, dose: e.target.value})} />
-                    <TextField label="Frecuencia" fullWidth value={newMedicine.freq} onChange={(e) => setNewMedicine({...newMedicine, freq: e.target.value})} />
-                    <Button variant="contained" onClick={handleAddMedicine}>Guardar</Button>
+                    <TextField 
+                      label="Nombre" 
+                      fullWidth 
+                      required
+                      value={newMedicine.name} 
+                      onChange={(e) => setNewMedicine({...newMedicine, name: e.target.value})}
+                      error={!newMedicine.name || !newMedicine.name.trim()}
+                      helperText={(!newMedicine.name || !newMedicine.name.trim()) ? 'El nombre del medicamento es requerido' : ''}
+                    />
+                    <TextField 
+                      label="Dosis" 
+                      fullWidth 
+                      required
+                      value={newMedicine.dose} 
+                      onChange={(e) => setNewMedicine({...newMedicine, dose: e.target.value})}
+                      error={!newMedicine.dose || !newMedicine.dose.trim()}
+                      helperText={(!newMedicine.dose || !newMedicine.dose.trim()) ? 'La dosis es requerida' : ''}
+                    />
+                    <TextField 
+                      select
+                      label="Vía" 
+                      fullWidth 
+                      value={newMedicine.route} 
+                      onChange={(e) => setNewMedicine({...newMedicine, route: e.target.value})}
+                      SelectProps={{ native: true }}
+                    >
+                      <option value="VO">Vía Oral</option>
+                      <option value="IV">Intravenoso</option>
+                      <option value="IM">Intramuscular</option>
+                      <option value="SC">Subcutáneo</option>
+                      <option value="TOP">Tópico</option>
+                    </TextField>
+                    <TextField 
+                      label="Frecuencia" 
+                      fullWidth 
+                      required
+                      value={newMedicine.freq} 
+                      onChange={(e) => setNewMedicine({...newMedicine, freq: e.target.value})}
+                      error={!newMedicine.freq || !newMedicine.freq.trim()}
+                      helperText={(!newMedicine.freq || !newMedicine.freq.trim()) ? 'La frecuencia es requerida' : ''}
+                    />
+                    <Button 
+                      variant="contained" 
+                      onClick={handleAddMedicine}
+                      disabled={!newMedicine.name?.trim() || !newMedicine.dose?.trim() || !newMedicine.freq?.trim()}
+                    >
+                      Guardar
+                    </Button>
                 </Stack>
             </Box>
           </Fade>
@@ -763,6 +1147,304 @@ function ClinicalDashboard() {
                     )}
                 </Box>
             </Fade>
+        </Modal>
+
+        {/* Edit Patient Modal */}
+        <Modal
+          open={showEditPatientModal}
+          onClose={() => {
+            setShowEditPatientModal(false);
+            setEditingPatient(null);
+          }}
+          closeAfterTransition
+          slots={{ backdrop: Backdrop }}
+          slotProps={{
+            backdrop: { timeout: 500, sx: { backdropFilter: 'blur(8px)', backgroundColor: 'rgba(0,0,0,0.5)' } },
+          }}
+        >
+          <Fade in={showEditPatientModal}>
+            <Box
+              sx={{
+                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                width: { xs: '95%', sm: '90%', md: 700 }, maxHeight: '90vh',
+                bgcolor: 'background.paper', borderRadius: '24px',
+                boxShadow: '0 32px 100px rgba(0,0,0,0.3)', overflow: 'hidden',
+                display: 'flex', flexDirection: 'column',
+              }}
+            >
+              {/* Header */}
+              <Box
+                sx={{
+                  background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: 'white', p: 2,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(255,255,255,0.2)', display: 'grid', placeItems: 'center' }}>
+                    <EditIcon sx={{ fontSize: 24 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" fontWeight={800}>Editar Paciente</Typography>
+                    <Typography variant="caption" sx={{ opacity: 0.9 }}>Modifique los campos necesarios</Typography>
+                  </Box>
+                </Box>
+                <IconButton onClick={() => {
+                  setShowEditPatientModal(false);
+                  setEditingPatient(null);
+                }} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.1)', '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' }, p: 1 }}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+
+              {/* Form Content */}
+              {editingPatient && (
+                <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Nombre completo" 
+                        fullWidth 
+                        required 
+                        size="small"
+                        value={editingPatient.nombre} 
+                        onChange={handleEditPatientChange('nombre')} 
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Cédula de Ciudadanía (ID)" 
+                        fullWidth 
+                        required 
+                        type="tel"
+                        size="small"
+                        value={editingPatient.cc} 
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          if (value.length <= 20) {
+                            handleEditPatientChange('cc')({ target: { value } });
+                          }
+                        }}
+                        inputProps={{ maxLength: 20 }}
+                        error={editingPatient.cc && (editingPatient.cc.length < 7 || editingPatient.cc.length > 20)}
+                        helperText={editingPatient.cc && (editingPatient.cc.length < 7 || editingPatient.cc.length > 20) 
+                          ? '7-20 dígitos' 
+                          : 'ID único (solo números)'}
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Fecha de Nacimiento" 
+                        fullWidth 
+                        type="date"
+                        size="small"
+                        value={editingPatient.fechaNacimiento} 
+                        onChange={handleEditPatientChange('fechaNacimiento')}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Edad" 
+                        fullWidth 
+                        type="number"
+                        size="small"
+                        value={editingPatient.edad} 
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 150)) {
+                            handleEditPatientChange('edad')({ target: { value } });
+                          }
+                        }}
+                        inputProps={{ min: 0, max: 150 }}
+                        helperText="Se calcula automáticamente si hay fecha de nacimiento"
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        select 
+                        label="Género" 
+                        fullWidth 
+                        size="small"
+                        value={editingPatient.genero} 
+                        onChange={handleEditPatientChange('genero')}
+                        SelectProps={{ native: true }}
+                        sx={{ mb: 2 }}
+                      >
+                        <option value="Masculino">Masculino</option>
+                        <option value="Femenino">Femenino</option>
+                        <option value="Otro">Otro</option>
+                      </TextField>
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="EPS" 
+                        fullWidth 
+                        required 
+                        size="small"
+                        value={editingPatient.eps} 
+                        onChange={handleEditPatientChange('eps')} 
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12}>
+                      <TextField 
+                        label="Dirección" 
+                        fullWidth 
+                        size="small"
+                        value={editingPatient.direccion} 
+                        onChange={handleEditPatientChange('direccion')} 
+                        InputProps={{ 
+                          startAdornment: (<InputAdornment position="start"><HomeIcon color="action" /></InputAdornment>) 
+                        }}
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Alergias" 
+                        fullWidth 
+                        multiline 
+                        rows={2}
+                        size="small"
+                        value={editingPatient.alergias} 
+                        onChange={handleEditPatientChange('alergias')} 
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Diagnósticos" 
+                        fullWidth 
+                        multiline 
+                        rows={2}
+                        size="small"
+                        value={editingPatient.diagnosticos} 
+                        onChange={handleEditPatientChange('diagnosticos')} 
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Enfermedades Previas" 
+                        fullWidth 
+                        size="small"
+                        value={editingPatient.enfermedadesPrevias} 
+                        onChange={handleEditPatientChange('enfermedadesPrevias')} 
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Cirugías" 
+                        fullWidth 
+                        size="small"
+                        value={editingPatient.cirugias} 
+                        onChange={handleEditPatientChange('cirugias')} 
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Nombre del Acudiente" 
+                        fullWidth 
+                        size="small"
+                        value={editingPatient.nombreAcudiente} 
+                        onChange={handleEditPatientChange('nombreAcudiente')} 
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} md={6}>
+                      <TextField 
+                        label="Teléfono del Acudiente" 
+                        fullWidth 
+                        type="tel"
+                        size="small"
+                        value={editingPatient.telefono} 
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/\D/g, '');
+                          if (value.length <= 15) {
+                            handleEditPatientChange('telefono')({ target: { value } });
+                          }
+                        }}
+                        inputProps={{ maxLength: 15 }}
+                        error={editingPatient.telefono && (editingPatient.telefono.length < 7 || editingPatient.telefono.length > 15)}
+                        helperText={editingPatient.telefono && (editingPatient.telefono.length < 7 || editingPatient.telefono.length > 15) 
+                          ? '7-15 dígitos' 
+                          : 'Solo números'}
+                        sx={{ mb: 2 }}
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
+              )}
+
+              {/* Footer */}
+              <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider', bgcolor: '#fafafa' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>
+                  <Button 
+                    variant="outlined" 
+                    onClick={() => {
+                      setShowEditPatientModal(false);
+                      setEditingPatient(null);
+                    }}
+                    size="small"
+                    sx={{ borderRadius: '10px', px: 3, py: 1, textTransform: 'none', fontWeight: 600 }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    onClick={handleUpdatePatient} 
+                    size="small"
+                    disabled={updatingPatient || !editingPatient?.nombre || !editingPatient?.cc || (!editingPatient?.fechaNacimiento && !editingPatient?.edad) || !editingPatient?.eps} 
+                    sx={{ 
+                      borderRadius: '10px', 
+                      px: 3, 
+                      py: 1, 
+                      textTransform: 'none', 
+                      fontWeight: 600, 
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
+                      boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', 
+                      '&:hover': { 
+                        background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                        boxShadow: '0 6px 16px rgba(59, 130, 246, 0.4)'
+                      }, 
+                      '&:disabled': { 
+                        background: '#e0e0e0', 
+                        boxShadow: 'none',
+                        color: '#9e9e9e'
+                      } 
+                    }}
+                  >
+                    {updatingPatient ? (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <CircularProgress size={16} color="inherit" />
+                        Actualizando...
+                      </Box>
+                    ) : (
+                      'Guardar Cambios'
+                    )}
+                  </Button>
+                </Box>
+              </Box>
+            </Box>
+          </Fade>
         </Modal>
 
       </Container>

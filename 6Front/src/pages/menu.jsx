@@ -35,6 +35,7 @@ import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom';
 import HistoryIcon from '@mui/icons-material/History';
 import HomeIcon from '@mui/icons-material/Home';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import EditIcon from '@mui/icons-material/Edit';
 
 // Patient avatar images
 import maleAvatar1 from '../assets/m1.png';
@@ -107,12 +108,17 @@ function Menu() {
   const [error, setError] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [showNewPatientModal, setShowNewPatientModal] = useState(false);
+  const [showEditPatientModal, setShowEditPatientModal] = useState(false);
+  const [editingPatient, setEditingPatient] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(new Date());
+  const [currentUser, setCurrentUser] = useState(null);
   const [newPatient, setNewPatient] = useState({
     nombre: '',
+    fechaNacimiento: '',
     edad: '',
     genero: 'Masculino',
+    cc: '',
     eps: '',
     alergias: '',
     diagnosticos: '',
@@ -134,6 +140,7 @@ function Menu() {
       const formattedPatients = response.data.patients.map(p => ({
         id: p.id,
         name: p.nombre,
+        fechaNacimiento: p.fecha_nacimiento,
         age: p.edad,
         genero: p.genero,
         cc: p.cc,
@@ -155,6 +162,16 @@ function Menu() {
 
   useEffect(() => {
     fetchPatients();
+    
+    // Get current user info
+    const userInfo = localStorage.getItem('user_info');
+    if (userInfo) {
+      try {
+        setCurrentUser(JSON.parse(userInfo));
+      } catch (error) {
+        console.error('Error parsing user_info:', error);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -162,27 +179,79 @@ function Menu() {
     return () => clearInterval(timer);
   }, []);
 
+  // Calculate age from date of birth
+  const calculateAge = (fechaNacimiento) => {
+    if (!fechaNacimiento) return '';
+    const birthDate = new Date(fechaNacimiento);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age.toString();
+  };
+
   const handleNewPatientChange = (field) => (e) => {
-    setNewPatient(prev => ({ ...prev, [field]: e.target.value }));
+    const value = e.target.value;
+    setNewPatient(prev => {
+      const updated = { ...prev, [field]: value };
+      // Auto-calculate age when fechaNacimiento changes
+      if (field === 'fechaNacimiento' && value) {
+        updated.edad = calculateAge(value);
+      }
+      return updated;
+    });
   };
 
   const handleAddPatient = async () => {
+    // Validation
+    if (!newPatient.nombre || !newPatient.nombre.trim()) {
+      setSnackbar({ open: true, message: 'El nombre completo es requerido.', severity: 'error' });
+      return;
+    }
+    if (!newPatient.cc || newPatient.cc.length < 7 || newPatient.cc.length > 20) {
+      setSnackbar({ open: true, message: 'La cédula de ciudadanía es requerida (7-20 dígitos).', severity: 'error' });
+      return;
+    }
+    if (!newPatient.fechaNacimiento && (!newPatient.edad || parseInt(newPatient.edad) < 0 || parseInt(newPatient.edad) > 150)) {
+      setSnackbar({ open: true, message: 'Debe proporcionar fecha de nacimiento o edad válida (0-150 años).', severity: 'error' });
+      return;
+    }
+    if (newPatient.edad && (parseInt(newPatient.edad) < 0 || parseInt(newPatient.edad) > 150)) {
+      setSnackbar({ open: true, message: 'La edad debe estar entre 0 y 150 años.', severity: 'error' });
+      return;
+    }
+    if (!newPatient.eps || !newPatient.eps.trim()) {
+      setSnackbar({ open: true, message: 'La EPS es requerida.', severity: 'error' });
+      return;
+    }
+    if (!newPatient.nombreAcudiente || !newPatient.nombreAcudiente.trim()) {
+      setSnackbar({ open: true, message: 'El nombre del acudiente es requerido.', severity: 'error' });
+      return;
+    }
+    if (!newPatient.telefono || newPatient.telefono.length < 7 || newPatient.telefono.length > 15) {
+      setSnackbar({ open: true, message: 'El teléfono debe tener entre 7 y 15 dígitos.', severity: 'error' });
+      return;
+    }
+    
     setSubmitting(true);
     
     // Prepare payload matching Django Model fields
     const payload = {
-        nombre: newPatient.nombre,
-        edad: parseInt(newPatient.edad),
+        nombre: newPatient.nombre.trim(),
+        cc: newPatient.cc,
+        fecha_nacimiento: newPatient.fechaNacimiento || null,
+        edad: newPatient.edad ? parseInt(newPatient.edad) : null,
         genero: newPatient.genero,
-        cc: '', // Add field if you want to capture ID in modal
-        direccion: newPatient.direccion,
-        eps: newPatient.eps,
-        alergias: newPatient.alergias,
-        diagnosticos: newPatient.diagnosticos,
+        direccion: newPatient.direccion?.trim() || '',
+        eps: newPatient.eps.trim(),
+        alergias: newPatient.alergias?.trim() || '',
+        diagnosticos: newPatient.diagnosticos?.trim() || '',
         status: 'Estable',
-        enfermedades_previas: newPatient.enfermedadesPrevias,
-        cirugias: newPatient.cirugias,
-        nombre_acudiente: newPatient.nombreAcudiente,
+        enfermedades_previas: newPatient.enfermedadesPrevias?.trim() || '',
+        cirugias: newPatient.cirugias?.trim() || '',
+        nombre_acudiente: newPatient.nombreAcudiente.trim(),
         telefono_acudiente: newPatient.telefono
     };
 
@@ -207,8 +276,8 @@ function Menu() {
       
       // Reset form and close modal
       setNewPatient({
-        nombre: '', edad: '', genero: 'Masculino', eps: '', alergias: '',
-        diagnosticos: '', nombreAcudiente: '', telefono: '', 
+        nombre: '', fechaNacimiento: '', edad: '', genero: 'Masculino', cc: '',
+        eps: '', alergias: '', diagnosticos: '', nombreAcudiente: '', telefono: '', 
         enfermedadesPrevias: '', cirugias: '', direccion: '',
       });
       setShowNewPatientModal(false);
@@ -297,6 +366,123 @@ function Menu() {
 
   const handleOpenPatient = (patient) => {
     navigate(`/patient/${patient.id}`, { state: { patient: patient, patients: activePatients } });
+  };
+
+  const handleEditPatient = async (patient) => {
+    try {
+      // Fetch full patient data
+      const response = await axiosInstance.get(`patients/${patient.id}/`);
+      const data = response.data;
+      
+      setEditingPatient({
+        id: data.id,
+        nombre: data.nombre || '',
+        fechaNacimiento: data.fecha_nacimiento || '',
+        edad: data.edad ? data.edad.toString() : '',
+        genero: data.genero || 'Masculino',
+        cc: data.cc || '',
+        eps: data.eps || '',
+        alergias: data.alergias || '',
+        diagnosticos: data.diagnosticos || '',
+        nombreAcudiente: data.nombre_acudiente || '',
+        telefono: data.telefono_acudiente || '',
+        enfermedadesPrevias: data.enfermedades_previas || '',
+        cirugias: data.cirugias || '',
+        direccion: data.direccion || '',
+      });
+      setShowEditPatientModal(true);
+    } catch (err) {
+      console.error('Error fetching patient data:', err);
+      setSnackbar({ open: true, message: 'Error al cargar datos del paciente.', severity: 'error' });
+    }
+  };
+
+  const handleEditPatientChange = (field) => (e) => {
+    const value = e.target.value;
+    setEditingPatient(prev => {
+      const updated = { ...prev, [field]: value };
+      // Auto-calculate age when fechaNacimiento changes
+      if (field === 'fechaNacimiento' && value) {
+        updated.edad = calculateAge(value);
+      }
+      return updated;
+    });
+  };
+
+  const handleUpdatePatient = async () => {
+    if (!editingPatient) return;
+    
+    // Validation
+    if (!editingPatient.nombre || !editingPatient.nombre.trim()) {
+      setSnackbar({ open: true, message: 'El nombre completo es requerido.', severity: 'error' });
+      return;
+    }
+    if (!editingPatient.cc || editingPatient.cc.length < 7 || editingPatient.cc.length > 20) {
+      setSnackbar({ open: true, message: 'La cédula de ciudadanía es requerida (7-20 dígitos).', severity: 'error' });
+      return;
+    }
+    if (!editingPatient.fechaNacimiento && (!editingPatient.edad || parseInt(editingPatient.edad) < 0 || parseInt(editingPatient.edad) > 150)) {
+      setSnackbar({ open: true, message: 'Debe proporcionar fecha de nacimiento o edad válida (0-150 años).', severity: 'error' });
+      return;
+    }
+    if (editingPatient.edad && (parseInt(editingPatient.edad) < 0 || parseInt(editingPatient.edad) > 150)) {
+      setSnackbar({ open: true, message: 'La edad debe estar entre 0 y 150 años.', severity: 'error' });
+      return;
+    }
+    if (!editingPatient.eps || !editingPatient.eps.trim()) {
+      setSnackbar({ open: true, message: 'La EPS es requerida.', severity: 'error' });
+      return;
+    }
+    
+    setSubmitting(true);
+    
+    const payload = {
+      nombre: editingPatient.nombre.trim(),
+      cc: editingPatient.cc,
+      fecha_nacimiento: editingPatient.fechaNacimiento || null,
+      edad: editingPatient.edad ? parseInt(editingPatient.edad) : null,
+      genero: editingPatient.genero,
+      direccion: editingPatient.direccion?.trim() || '',
+      eps: editingPatient.eps.trim(),
+      alergias: editingPatient.alergias?.trim() || '',
+      diagnosticos: editingPatient.diagnosticos?.trim() || '',
+      enfermedades_previas: editingPatient.enfermedadesPrevias?.trim() || '',
+      cirugias: editingPatient.cirugias?.trim() || '',
+      nombre_acudiente: editingPatient.nombreAcudiente?.trim() || '',
+      telefono_acudiente: editingPatient.telefono || '',
+    };
+
+    try {
+      const response = await axiosInstance.patch(`patients/${editingPatient.id}/`, payload);
+      
+      // Update patient in local state
+      setPatients(prev => prev.map(p => 
+        p.id === editingPatient.id 
+          ? {
+              ...p,
+              name: response.data.nombre,
+              fechaNacimiento: response.data.fecha_nacimiento,
+              age: response.data.edad,
+              cc: response.data.cc,
+              eps: response.data.eps,
+              genero: response.data.genero,
+            }
+          : p
+      ));
+      
+      setShowEditPatientModal(false);
+      setEditingPatient(null);
+      setSnackbar({ open: true, message: '¡Paciente actualizado exitosamente!', severity: 'success' });
+    } catch (err) {
+      console.error('Error updating patient:', err);
+      if (err.response?.status === 403) {
+        setSnackbar({ open: true, message: 'No tiene permisos para editar pacientes.', severity: 'error' });
+      } else {
+        setSnackbar({ open: true, message: err.response?.data?.detail || 'Error al actualizar paciente.', severity: 'error' });
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -434,7 +620,7 @@ function Menu() {
                 <Grid container spacing={2}>
                   {filteredPatients.map((patient) => (
                     <Grid item xs={12} md={6} key={patient.id}>
-                      <PatientRow onClick={() => handleOpenPatient(patient)} role="button" aria-label={`Abrir ficha de ${patient.name}`}>
+                      <PatientRow role="button" aria-label={`Abrir ficha de ${patient.name}`}>
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                           {(() => {
                             const genderMeta = getGenderMeta(patient.genero, patient.id);
@@ -442,15 +628,42 @@ function Menu() {
                           })()}
                           <Box sx={{ flex: 1 }}>
                             <Stack direction="row" justifyContent="space-between" alignItems="center">
-                              <Box>
+                              <Box sx={{ flex: 1 }} onClick={() => handleOpenPatient(patient)} style={{ cursor: 'pointer' }}>
                                 <Typography variant="subtitle1" fontWeight={700} color={getGenderMeta(patient.genero, patient.id).color}>
                                   {patient.name}
                                 </Typography>
                                 <Typography variant="body2" color="text.secondary">
-                                  Cama {patient.room || 'N/A'} 
+                                  CC: {patient.cc || 'N/A'} • Cama {patient.room || 'N/A'} 
                                 </Typography>
                               </Box>
-                              <ArrowForwardIcon color="primary" />
+                              <Stack direction="row" spacing={0.5} alignItems="center">
+                                {currentUser?.is_superuser && (
+                                  <IconButton
+                                    size="small"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditPatient(patient);
+                                    }}
+                                    sx={{
+                                      color: 'primary.main',
+                                      '&:hover': { bgcolor: 'primary.light', color: 'white' }
+                                    }}
+                                    title="Editar paciente"
+                                  >
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                )}
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenPatient(patient)}
+                                  sx={{
+                                    color: 'primary.main',
+                                    '&:hover': { bgcolor: 'primary.light', color: 'white' }
+                                  }}
+                                >
+                                  <ArrowForwardIcon fontSize="small" />
+                                </IconButton>
+                              </Stack>
                             </Stack>
                             <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
                               <Chip size="small" color="primary" label={patient.status || 'Estable'} />
@@ -501,7 +714,7 @@ function Menu() {
           <Box
             sx={{
               position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-              width: { xs: '95%', sm: '90%', md: 800 }, maxHeight: '90vh',
+              width: { xs: '95%', sm: '90%', md: 900 }, maxHeight: '95vh',
               bgcolor: 'background.paper', borderRadius: '24px',
               boxShadow: '0 32px 100px rgba(0,0,0,0.3)', overflow: 'hidden',
               display: 'flex', flexDirection: 'column',
@@ -510,80 +723,682 @@ function Menu() {
             {/* Header */}
             <Box
               sx={{
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', p: 3,
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: 'white', p: 2,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ width: 50, height: 50, borderRadius: '16px', bgcolor: 'rgba(255,255,255,0.2)', display: 'grid', placeItems: 'center' }}>
-                  <PersonAddIcon sx={{ fontSize: 28 }} />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(255,255,255,0.2)', display: 'grid', placeItems: 'center' }}>
+                  <PersonAddIcon sx={{ fontSize: 24 }} />
                 </Box>
                 <Box>
-                  <Typography variant="h5" fontWeight={800}>Nuevo Paciente</Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>Complete los campos requeridos</Typography>
+                  <Typography variant="h6" fontWeight={800}>Nuevo Paciente</Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.9 }}>Complete los campos requeridos</Typography>
                 </Box>
               </Box>
-              <IconButton onClick={() => setShowNewPatientModal(false)} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.1)', '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' } }}>
-                <CloseIcon />
+              <IconButton onClick={() => setShowNewPatientModal(false)} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.1)', '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' }, p: 1 }}>
+                <CloseIcon fontSize="small" />
               </IconButton>
             </Box>
 
             {/* Form Content */}
-            <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                    <PersonIcon sx={{ color: '#2f84e4' }} />
-                    <Typography variant="h6" fontWeight={700} color="primary">Información Personal</Typography>
-                  </Box>
-                </Grid>
+            <Box sx={{ flex: 1, overflow: 'hidden', p: 2.5 }}>
+              <Grid container spacing={2}>
                 
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Nombre completo" fullWidth required value={newPatient.nombre} onChange={handleNewPatientChange('nombre')} InputProps={{ sx: { borderRadius: '12px' } }} />
-                </Grid>
-                <Grid item xs={12} sm={3}>
-                  <TextField label="Edad" fullWidth required type="number" value={newPatient.edad} onChange={handleNewPatientChange('edad')} InputProps={{ sx: { borderRadius: '12px' }, inputProps: { min: 0, max: 150 } }} />
-                </Grid>
-                <Grid item xs={12} sm={3}>
-                  <TextField select label="Género" fullWidth required value={newPatient.genero} onChange={handleNewPatientChange('genero')} InputProps={{ sx: { borderRadius: '12px' } }}>
-                    <MenuItem value="Masculino">Masculino</MenuItem>
-                    <MenuItem value="Femenino">Femenino</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="EPS" fullWidth required value={newPatient.eps} onChange={handleNewPatientChange('eps')} InputProps={{ sx: { borderRadius: '12px' } }} />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField label="Dirección" fullWidth value={newPatient.direccion} onChange={handleNewPatientChange('direccion')} InputProps={{ sx: { borderRadius: '12px' }, startAdornment: (<InputAdornment position="start"><HomeIcon color="action" /></InputAdornment>) }} />
+                {/* SECTION 1: Información Personal */}
+                <Grid item xs={12}>
+                  <Paper elevation={0} sx={{ p: 2, bgcolor: '#f0f7ff', borderRadius: '12px', border: '1px solid', borderColor: 'primary.light' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <Box sx={{ width: 32, height: 32, borderRadius: '8px', bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <PersonIcon sx={{ color: 'white', fontSize: 20 }} />
+                      </Box>
+                      <Typography variant="subtitle1" fontWeight={700} color="primary">Información Personal</Typography>
+                    </Box>
+                    
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={12} md={6}>
+                        <TextField 
+                          label="Nombre completo" 
+                          fullWidth 
+                          required 
+                          size="small"
+                          value={newPatient.nombre} 
+                          onChange={handleNewPatientChange('nombre')} 
+                          InputProps={{ sx: { borderRadius: '12px' } }}
+                          placeholder="Ej: Juan Pérez García"
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <TextField 
+                          label="Cédula de Ciudadanía (ID)" 
+                          fullWidth 
+                          required 
+                          type="tel"
+                          size="small"
+                          value={newPatient.cc} 
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            if (value.length <= 20) {
+                              handleNewPatientChange('cc')({ target: { value } });
+                            }
+                          }}
+                          InputProps={{ 
+                            sx: { borderRadius: '12px' },
+                            inputProps: { maxLength: 20 }
+                          }}
+                          error={newPatient.cc && (newPatient.cc.length < 7 || newPatient.cc.length > 20)}
+                          helperText={newPatient.cc && (newPatient.cc.length < 7 || newPatient.cc.length > 20) 
+                            ? '7-20 dígitos' 
+                            : 'ID único (solo números)'}
+                          placeholder="1234567890"
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={3}>
+                        <TextField 
+                          label="Fecha de Nacimiento" 
+                          fullWidth 
+                          type="date"
+                          size="small"
+                          value={newPatient.fechaNacimiento} 
+                          onChange={handleNewPatientChange('fechaNacimiento')}
+                          InputLabelProps={{ shrink: true }}
+                          InputProps={{ sx: { borderRadius: '12px' } }}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={2}>
+                        <TextField 
+                          label="Edad" 
+                          fullWidth 
+                          type="number" 
+                          size="small"
+                          value={newPatient.edad} 
+                          onChange={handleNewPatientChange('edad')} 
+                          InputProps={{ 
+                            sx: { borderRadius: '12px' }, 
+                            inputProps: { min: 0, max: 150, step: 1 } 
+                          }}
+                          error={newPatient.edad && (parseInt(newPatient.edad) < 0 || parseInt(newPatient.edad) > 150)}
+                          helperText={newPatient.edad && (parseInt(newPatient.edad) < 0 || parseInt(newPatient.edad) > 150) 
+                            ? '0-150' 
+                            : 'Opcional'}
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={3}>
+                        <TextField 
+                          select 
+                          label="Género" 
+                          fullWidth 
+                          required 
+                          size="small"
+                          value={newPatient.genero} 
+                          onChange={handleNewPatientChange('genero')} 
+                          InputProps={{ sx: { borderRadius: '12px' } }}
+                        >
+                          <MenuItem value="Masculino">Masculino</MenuItem>
+                          <MenuItem value="Femenino">Femenino</MenuItem>
+                        </TextField>
+                      </Grid>
+                      
+                      <Grid item xs={12} md={4}>
+                        <TextField 
+                          label="EPS" 
+                          fullWidth 
+                          required 
+                          size="small"
+                          value={newPatient.eps} 
+                          onChange={handleNewPatientChange('eps')} 
+                          InputProps={{ sx: { borderRadius: '12px' } }}
+                          placeholder="Ej: Sura, Coomeva"
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={8}>
+                        <TextField 
+                          label="Dirección" 
+                          fullWidth 
+                          size="small"
+                          value={newPatient.direccion} 
+                          onChange={handleNewPatientChange('direccion')} 
+                          InputProps={{ 
+                            sx: { borderRadius: '12px' }, 
+                            startAdornment: (<InputAdornment position="start"><HomeIcon color="action" /></InputAdornment>) 
+                          }}
+                          placeholder="Ej: Calle 123 #45-67"
+                        />
+                      </Grid>
+                    </Grid>
+                  </Paper>
                 </Grid>
 
+                {/* SECTION 2: Información Médica */}
                 <Grid item xs={12}>
-                  <Divider sx={{ my: 1 }} />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2, mb: 2 }}>
-                    <LocalPharmacyIcon sx={{ color: '#f59e0b' }} />
-                    <Typography variant="h6" fontWeight={700} sx={{ color: '#f59e0b' }}>Información Médica</Typography>
-                  </Box>
+                  <Paper elevation={0} sx={{ p: 2, bgcolor: '#fffbf0', borderRadius: '12px', border: '1px solid', borderColor: 'warning.light' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <Box sx={{ width: 32, height: 32, borderRadius: '8px', bgcolor: 'warning.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <LocalPharmacyIcon sx={{ color: 'white', fontSize: 20 }} />
+                      </Box>
+                      <Typography variant="subtitle1" fontWeight={700} sx={{ color: 'warning.dark' }}>Información Médica</Typography>
+                    </Box>
+                    
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={12} md={6}>
+                        <TextField 
+                          label="Alergias" 
+                          fullWidth 
+                          multiline 
+                          rows={2} 
+                          value={newPatient.alergias} 
+                          onChange={handleNewPatientChange('alergias')} 
+                          InputProps={{ sx: { borderRadius: '12px' } }}
+                          placeholder="Ej: Penicilina, Ibuprofeno, etc."
+                          size="small"
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <TextField 
+                          label="Diagnósticos" 
+                          fullWidth 
+                          multiline 
+                          rows={2} 
+                          value={newPatient.diagnosticos} 
+                          onChange={handleNewPatientChange('diagnosticos')} 
+                          InputProps={{ sx: { borderRadius: '12px' } }}
+                          placeholder="Ej: Hipertensión, Diabetes tipo 2, etc."
+                          size="small"
+                        />
+                      </Grid>
+                    </Grid>
+                  </Paper>
                 </Grid>
-                <Grid item xs={12}><TextField label="Alergias" fullWidth multiline rows={2} value={newPatient.alergias} onChange={handleNewPatientChange('alergias')} InputProps={{ sx: { borderRadius: '12px' } }} /></Grid>
-                <Grid item xs={12}><TextField label="Diagnósticos" fullWidth multiline rows={2} value={newPatient.diagnosticos} onChange={handleNewPatientChange('diagnosticos')} InputProps={{ sx: { borderRadius: '12px' } }} /></Grid>
 
+                {/* SECTION 3: Contacto de Emergencia */}
                 <Grid item xs={12}>
-                  <Divider sx={{ my: 1 }} />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2, mb: 2 }}>
-                    <FamilyRestroomIcon sx={{ color: '#ef4444' }} />
-                    <Typography variant="h6" fontWeight={700} sx={{ color: '#ef4444' }}>Contacto de Emergencia</Typography>
-                  </Box>
+                  <Paper elevation={0} sx={{ p: 2, bgcolor: '#fff0f0', borderRadius: '12px', border: '1px solid', borderColor: 'error.light' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                      <Box sx={{ width: 32, height: 32, borderRadius: '8px', bgcolor: 'error.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <FamilyRestroomIcon sx={{ color: 'white', fontSize: 20 }} />
+                      </Box>
+                      <Typography variant="subtitle1" fontWeight={700} sx={{ color: 'error.dark' }}>Contacto de Emergencia</Typography>
+                    </Box>
+                    
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={12} md={6}>
+                        <TextField 
+                          label="Nombre del acudiente" 
+                          fullWidth 
+                          required 
+                          size="small"
+                          value={newPatient.nombreAcudiente} 
+                          onChange={handleNewPatientChange('nombreAcudiente')} 
+                          InputProps={{ sx: { borderRadius: '12px' } }}
+                          placeholder="Ej: María Pérez"
+                        />
+                      </Grid>
+                      
+                      <Grid item xs={12} md={6}>
+                        <TextField 
+                          label="Teléfono del acudiente" 
+                          fullWidth 
+                          required 
+                          type="tel"
+                          size="small"
+                          value={newPatient.telefono} 
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '');
+                            if (value.length <= 15) {
+                              handleNewPatientChange('telefono')({ target: { value } });
+                            }
+                          }}
+                          InputProps={{ 
+                            sx: { borderRadius: '12px' },
+                            inputProps: { maxLength: 15 }
+                          }}
+                          error={newPatient.telefono && (newPatient.telefono.length < 7 || newPatient.telefono.length > 15)}
+                          helperText={newPatient.telefono && (newPatient.telefono.length < 7 || newPatient.telefono.length > 15) 
+                            ? '7-15 dígitos' 
+                            : 'Solo números'}
+                          placeholder="3001234567"
+                        />
+                      </Grid>
+                    </Grid>
+                  </Paper>
                 </Grid>
-                <Grid item xs={12} sm={6}><TextField label="Nombre del acudiente" fullWidth required value={newPatient.nombreAcudiente} onChange={handleNewPatientChange('nombreAcudiente')} InputProps={{ sx: { borderRadius: '12px' } }} /></Grid>
-                <Grid item xs={12} sm={6}><TextField label="Teléfono del acudiente" fullWidth required value={newPatient.telefono} onChange={handleNewPatientChange('telefono')} InputProps={{ sx: { borderRadius: '12px' } }} /></Grid>
               </Grid>
             </Box>
 
-            <Box sx={{ p: 3, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'grey.50', display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-              <Button variant="outlined" onClick={() => setShowNewPatientModal(false)} sx={{ borderRadius: '12px', px: 4, py: 1.5, textTransform: 'none', fontWeight: 600 }}>Cancelar</Button>
-              <Button variant="contained" onClick={handleAddPatient} disabled={submitting || !newPatient.nombre || !newPatient.edad || !newPatient.eps} sx={{ borderRadius: '12px', px: 4, py: 1.5, textTransform: 'none', fontWeight: 600, background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)', '&:hover': { background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }, '&:disabled': { background: '#e0e0e0', boxShadow: 'none' } }}>
-                {submitting ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}><CircularProgress size={20} color="inherit" />Registrando...</Box> : 'Registrar Paciente'}
-              </Button>
+            <Box sx={{ 
+              p: 2, 
+              borderTop: '1px solid', 
+              borderColor: 'divider', 
+              bgcolor: '#f8f9fa', 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              gap: 2 
+            }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Campos marcados con * son obligatorios
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => setShowNewPatientModal(false)} 
+                  size="small"
+                  sx={{ 
+                    borderRadius: '10px', 
+                    px: 3, 
+                    py: 1, 
+                    textTransform: 'none', 
+                    fontWeight: 600,
+                    borderColor: 'grey.300',
+                    color: 'grey.700',
+                    '&:hover': {
+                      borderColor: 'grey.400',
+                      bgcolor: 'grey.50'
+                    }
+                  }}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  variant="contained" 
+                  onClick={handleAddPatient} 
+                  size="small"
+                  disabled={submitting || !newPatient.nombre || !newPatient.cc || (!newPatient.fechaNacimiento && !newPatient.edad) || !newPatient.eps} 
+                  sx={{ 
+                    borderRadius: '10px', 
+                    px: 3, 
+                    py: 1, 
+                    textTransform: 'none', 
+                    fontWeight: 600, 
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', 
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)', 
+                    '&:hover': { 
+                      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                      boxShadow: '0 6px 16px rgba(16, 185, 129, 0.4)'
+                    }, 
+                    '&:disabled': { 
+                      background: '#e0e0e0', 
+                      boxShadow: 'none',
+                      color: '#9e9e9e'
+                    } 
+                  }}
+                >
+                  {submitting ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CircularProgress size={16} color="inherit" />
+                      Registrando...
+                    </Box>
+                  ) : (
+                    'Registrar Paciente'
+                  )}
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        </Fade>
+      </Modal>
+
+      {/* Edit Patient Modal */}
+      <Modal
+        open={showEditPatientModal}
+        onClose={() => {
+          setShowEditPatientModal(false);
+          setEditingPatient(null);
+        }}
+        closeAfterTransition
+        slots={{ backdrop: Backdrop }}
+        slotProps={{
+          backdrop: { timeout: 500, sx: { backdropFilter: 'blur(8px)', backgroundColor: 'rgba(0,0,0,0.5)' } },
+        }}
+      >
+        <Fade in={showEditPatientModal}>
+          <Box
+            sx={{
+              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: { xs: '95%', sm: '90%', md: 900 }, maxHeight: '95vh',
+              bgcolor: 'background.paper', borderRadius: '24px',
+              boxShadow: '0 32px 100px rgba(0,0,0,0.3)', overflow: 'hidden',
+              display: 'flex', flexDirection: 'column',
+            }}
+          >
+            {/* Header */}
+            <Box
+              sx={{
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: 'white', p: 2,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Box sx={{ width: 40, height: 40, borderRadius: '12px', bgcolor: 'rgba(255,255,255,0.2)', display: 'grid', placeItems: 'center' }}>
+                  <EditIcon sx={{ fontSize: 24 }} />
+                </Box>
+                <Box>
+                  <Typography variant="h6" fontWeight={800}>Editar Paciente</Typography>
+                  <Typography variant="caption" sx={{ opacity: 0.9 }}>Modifique los campos necesarios</Typography>
+                </Box>
+              </Box>
+              <IconButton onClick={() => {
+                setShowEditPatientModal(false);
+                setEditingPatient(null);
+              }} sx={{ color: 'white', bgcolor: 'rgba(255,255,255,0.1)', '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' }, p: 1 }}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+
+            {/* Form Content */}
+            {editingPatient && (
+              <Box sx={{ flex: 1, overflow: 'hidden', p: 2.5 }}>
+                <Grid container spacing={2}>
+                  
+                  {/* SECTION 1: Información Personal */}
+                  <Grid item xs={12}>
+                    <Paper elevation={0} sx={{ p: 2, bgcolor: '#f0f9ff', borderRadius: '12px', border: '1px solid', borderColor: 'primary.light' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                        <Box sx={{ width: 32, height: 32, borderRadius: '8px', bgcolor: 'primary.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <PersonIcon sx={{ color: 'white', fontSize: 20 }} />
+                        </Box>
+                        <Typography variant="subtitle1" fontWeight={700} sx={{ color: 'primary.dark' }}>Información Personal</Typography>
+                      </Box>
+                      
+                      <Grid container spacing={1.5}>
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            label="Nombre completo" 
+                            fullWidth 
+                            required 
+                            size="small"
+                            value={editingPatient.nombre} 
+                            onChange={handleEditPatientChange('nombre')} 
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                            placeholder="Ej: Juan Pérez García"
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            label="Cédula de Ciudadanía (ID)" 
+                            fullWidth 
+                            required 
+                            type="tel"
+                            size="small"
+                            value={editingPatient.cc} 
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              if (value.length <= 20) {
+                                handleEditPatientChange('cc')({ target: { value } });
+                              }
+                            }}
+                            InputProps={{ 
+                              sx: { borderRadius: '12px' },
+                              inputProps: { maxLength: 20 }
+                            }}
+                            error={editingPatient.cc && (editingPatient.cc.length < 7 || editingPatient.cc.length > 20)}
+                            helperText={editingPatient.cc && (editingPatient.cc.length < 7 || editingPatient.cc.length > 20) 
+                              ? '7-20 dígitos' 
+                              : 'ID único (solo números)'}
+                            placeholder="1234567890"
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={3}>
+                          <TextField 
+                            label="Fecha de Nacimiento" 
+                            fullWidth 
+                            type="date"
+                            size="small"
+                            value={editingPatient.fechaNacimiento} 
+                            onChange={handleEditPatientChange('fechaNacimiento')}
+                            InputLabelProps={{ shrink: true }}
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={3}>
+                          <TextField 
+                            label="Edad" 
+                            fullWidth 
+                            type="number"
+                            size="small"
+                            value={editingPatient.edad} 
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              if (value === '' || (parseInt(value) >= 0 && parseInt(value) <= 150)) {
+                                handleEditPatientChange('edad')({ target: { value } });
+                              }
+                            }}
+                            InputProps={{ 
+                              sx: { borderRadius: '12px' },
+                              inputProps: { min: 0, max: 150 }
+                            }}
+                            helperText="Se calcula automáticamente si hay fecha de nacimiento"
+                            placeholder="Años"
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            select 
+                            label="Género" 
+                            fullWidth 
+                            size="small"
+                            value={editingPatient.genero} 
+                            onChange={handleEditPatientChange('genero')}
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                            SelectProps={{ native: true }}
+                          >
+                            <option value="Masculino">Masculino</option>
+                            <option value="Femenino">Femenino</option>
+                            <option value="Otro">Otro</option>
+                          </TextField>
+                        </Grid>
+                        
+                        <Grid item xs={12} md={8}>
+                          <TextField 
+                            label="Dirección" 
+                            fullWidth 
+                            size="small"
+                            value={editingPatient.direccion} 
+                            onChange={handleEditPatientChange('direccion')} 
+                            InputProps={{ 
+                              sx: { borderRadius: '12px' }, 
+                              startAdornment: (<InputAdornment position="start"><HomeIcon color="action" /></InputAdornment>) 
+                            }}
+                            placeholder="Ej: Calle 123 #45-67"
+                          />
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Grid>
+
+                  {/* SECTION 2: Información Médica */}
+                  <Grid item xs={12}>
+                    <Paper elevation={0} sx={{ p: 2, bgcolor: '#fffbf0', borderRadius: '12px', border: '1px solid', borderColor: 'warning.light' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                        <Box sx={{ width: 32, height: 32, borderRadius: '8px', bgcolor: 'warning.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <LocalPharmacyIcon sx={{ color: 'white', fontSize: 20 }} />
+                        </Box>
+                        <Typography variant="subtitle1" fontWeight={700} sx={{ color: 'warning.dark' }}>Información Médica</Typography>
+                      </Box>
+                      
+                      <Grid container spacing={1.5}>
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            label="EPS" 
+                            fullWidth 
+                            required 
+                            size="small"
+                            value={editingPatient.eps} 
+                            onChange={handleEditPatientChange('eps')} 
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                            placeholder="Ej: SURA, COOMEVA"
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            label="Alergias" 
+                            fullWidth 
+                            multiline 
+                            rows={2}
+                            size="small"
+                            value={editingPatient.alergias} 
+                            onChange={handleEditPatientChange('alergias')} 
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                            placeholder="Ej: Penicilina, Látex"
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12}>
+                          <TextField 
+                            label="Diagnósticos" 
+                            fullWidth 
+                            multiline 
+                            rows={2}
+                            size="small"
+                            value={editingPatient.diagnosticos} 
+                            onChange={handleEditPatientChange('diagnosticos')} 
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                            placeholder="Ej: Hipertensión arterial, Diabetes tipo 2"
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            label="Enfermedades Previas" 
+                            fullWidth 
+                            size="small"
+                            value={editingPatient.enfermedadesPrevias} 
+                            onChange={handleEditPatientChange('enfermedadesPrevias')} 
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                            placeholder="Ej: Asma, Hipertensión"
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            label="Cirugías" 
+                            fullWidth 
+                            size="small"
+                            value={editingPatient.cirugias} 
+                            onChange={handleEditPatientChange('cirugias')} 
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                            placeholder="Ej: Apendicectomía (2010)"
+                          />
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Grid>
+
+                  {/* SECTION 3: Información del Acudiente */}
+                  <Grid item xs={12}>
+                    <Paper elevation={0} sx={{ p: 2, bgcolor: '#fef3f2', borderRadius: '12px', border: '1px solid', borderColor: 'error.light' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                        <Box sx={{ width: 32, height: 32, borderRadius: '8px', bgcolor: 'error.main', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <FamilyRestroomIcon sx={{ color: 'white', fontSize: 20 }} />
+                        </Box>
+                        <Typography variant="subtitle1" fontWeight={700} sx={{ color: 'error.dark' }}>Información del Acudiente</Typography>
+                      </Box>
+                      
+                      <Grid container spacing={1.5}>
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            label="Nombre del Acudiente" 
+                            fullWidth 
+                            size="small"
+                            value={editingPatient.nombreAcudiente} 
+                            onChange={handleEditPatientChange('nombreAcudiente')} 
+                            InputProps={{ sx: { borderRadius: '12px' } }}
+                            placeholder="Ej: María García"
+                          />
+                        </Grid>
+                        
+                        <Grid item xs={12} md={6}>
+                          <TextField 
+                            label="Teléfono del Acudiente" 
+                            fullWidth 
+                            type="tel"
+                            size="small"
+                            value={editingPatient.telefono} 
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/\D/g, '');
+                              if (value.length <= 15) {
+                                handleEditPatientChange('telefono')({ target: { value } });
+                              }
+                            }}
+                            InputProps={{ 
+                              sx: { borderRadius: '12px' },
+                              inputProps: { min: 0, maxLength: 15 }
+                            }}
+                            error={editingPatient.telefono && (editingPatient.telefono.length < 7 || editingPatient.telefono.length > 15)}
+                            helperText={editingPatient.telefono && (editingPatient.telefono.length < 7 || editingPatient.telefono.length > 15) 
+                              ? '7-15 dígitos' 
+                              : 'Solo números'}
+                            placeholder="3001234567"
+                          />
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </Box>
+            )}
+
+            {/* Footer */}
+            <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider', bgcolor: '#fafafa' }}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>
+                <Button 
+                  variant="outlined" 
+                  onClick={() => {
+                    setShowEditPatientModal(false);
+                    setEditingPatient(null);
+                  }}
+                  size="small"
+                  sx={{ borderRadius: '10px', px: 3, py: 1, textTransform: 'none', fontWeight: 600 }}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  variant="contained" 
+                  onClick={handleUpdatePatient} 
+                  size="small"
+                  disabled={submitting || !editingPatient?.nombre || !editingPatient?.cc || (!editingPatient?.fechaNacimiento && !editingPatient?.edad) || !editingPatient?.eps} 
+                  sx={{ 
+                    borderRadius: '10px', 
+                    px: 3, 
+                    py: 1, 
+                    textTransform: 'none', 
+                    fontWeight: 600, 
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)', 
+                    '&:hover': { 
+                      background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                      boxShadow: '0 6px 16px rgba(59, 130, 246, 0.4)'
+                    }, 
+                    '&:disabled': { 
+                      background: '#e0e0e0', 
+                      boxShadow: 'none',
+                      color: '#9e9e9e'
+                    } 
+                  }}
+                >
+                  {submitting ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <CircularProgress size={16} color="inherit" />
+                      Actualizando...
+                    </Box>
+                  ) : (
+                    'Actualizar Paciente'
+                  )}
+                </Button>
+              </Box>
             </Box>
           </Box>
         </Fade>

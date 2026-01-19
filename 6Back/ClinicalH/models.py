@@ -17,9 +17,10 @@ class Patient(models.Model):
     
     # Personal Information
     nombre = models.CharField(max_length=200, verbose_name="Nombre completo")
-    edad = models.PositiveIntegerField(verbose_name="Edad")
+    fecha_nacimiento = models.DateField(verbose_name="Fecha de nacimiento", null=True, blank=True)
+    edad = models.PositiveIntegerField(verbose_name="Edad", null=True, blank=True)
     genero = models.CharField(max_length=20, choices=GENDER_CHOICES, default='Masculino', verbose_name="Género")
-    cc = models.CharField(max_length=20, blank=True, null=True, verbose_name="Cédula de ciudadanía")
+    cc = models.CharField(max_length=20, unique=True, verbose_name="Cédula de ciudadanía (ID)")
     direccion = models.TextField(blank=True, null=True, verbose_name="Dirección")
     
     # Medical Information

@@ -8,6 +8,8 @@ This command creates:
     1. SUPERUSER: willarevalo (full CRUD access)
     2. Read-only user: Colin (password: Esperanza2026)
     3. Test Nurse: Nurse (password: nurse)
+    4. Nurse: albayasminlopezsanchez51@gmail.com (password: 10006531361)
+    5. Nurse: deykerraulavila@gmail.com (password: 1697369)
 """
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
@@ -80,6 +82,50 @@ class Command(BaseCommand):
         nurse_user.is_staff = False
         nurse_user.save()
         self.stdout.write(self.style.SUCCESS(f'✓ Nurse user "{username_nurse}" configured (can create notes, edit within 48h, create patients, manage medications)'))
+        
+        # 4. Create Nurse user: albayasminlopezsanchez51@gmail.com
+        username_nurse2 = 'albayasminlopezsanchez51@gmail.com'
+        password_nurse2 = '10006531361'
+        
+        if User.objects.filter(username=username_nurse2).exists():
+            nurse_user2 = User.objects.get(username=username_nurse2)
+            nurse_user2.set_password(password_nurse2)
+            nurse_user2.save()
+            self.stdout.write(self.style.WARNING(f'User "{username_nurse2}" already exists. Password updated.'))
+        else:
+            nurse_user2 = User.objects.create_user(
+                username=username_nurse2,
+                email=username_nurse2,
+                password=password_nurse2
+            )
+            self.stdout.write(self.style.SUCCESS(f'Created user "{username_nurse2}"'))
+        
+        nurse_user2.is_superuser = False
+        nurse_user2.is_staff = False
+        nurse_user2.save()
+        self.stdout.write(self.style.SUCCESS(f'✓ Nurse user "{username_nurse2}" configured (can create notes, edit within 48h, create patients, manage medications)'))
+        
+        # 5. Create Nurse user: deykerraulavila@gmail.com
+        username_nurse3 = 'deykerraulavila@gmail.com'
+        password_nurse3 = '1697369'
+        
+        if User.objects.filter(username=username_nurse3).exists():
+            nurse_user3 = User.objects.get(username=username_nurse3)
+            nurse_user3.set_password(password_nurse3)
+            nurse_user3.save()
+            self.stdout.write(self.style.WARNING(f'User "{username_nurse3}" already exists. Password updated.'))
+        else:
+            nurse_user3 = User.objects.create_user(
+                username=username_nurse3,
+                email=username_nurse3,
+                password=password_nurse3
+            )
+            self.stdout.write(self.style.SUCCESS(f'Created user "{username_nurse3}"'))
+        
+        nurse_user3.is_superuser = False
+        nurse_user3.is_staff = False
+        nurse_user3.save()
+        self.stdout.write(self.style.SUCCESS(f'✓ Nurse user "{username_nurse3}" configured (can create notes, edit within 48h, create patients, manage medications)'))
         
         self.stdout.write(self.style.SUCCESS('\n✓ All users set up successfully!'))
         self.stdout.write(self.style.WARNING('\nIMPORTANT: Change the default password for willarevalo in production!'))
