@@ -52,3 +52,15 @@ psql -U sexta_user -d sexta_medical_db -h <your-db-host> < backup_file.sql
 
 # Or using Docker (if using Docker on DigitalOcean):
 docker-compose exec -T db psql -U sexta_user -d sexta_medical_db < backup_file.sql
+
+
+docker-compose run --rm backend python manage.py migrate
+
+# To run collectstatic manually:
+docker-compose run --rm backend python manage.py collectstatic --noinput
+
+# To run both:
+docker-compose run --rm backend sh -c "python manage.py migrate && python manage.py collectstatic --noinput"
+
+# To run setup_users command:
+# docker-compose run --rm backend python manage.py setup_users

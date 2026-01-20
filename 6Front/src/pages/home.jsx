@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Typography, styled, keyframes } from '@mui/material';
+import logoImage from '../assets/6h.png';
 
 // Animation LOGO
 const spinAnimation = keyframes`  from { transform: rotate(0deg); } 
@@ -74,7 +75,7 @@ function Home(){
       <LogoContainer onClick={handleClick}>
         <LogoGlow />
         <ClickableLogo
-          src="/src/assets/6h.png"
+          src={logoImage}
           alt="Sexta Logo"
           isSpinning={isSpinning}
           onAnimationEnd={handleAnimationEnd}

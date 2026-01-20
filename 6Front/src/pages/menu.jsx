@@ -665,15 +665,18 @@ function Menu() {
                                 </IconButton>
                               </Stack>
                             </Stack>
-                            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+                            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                               <Chip size="small" color="primary" label={patient.status || 'Estable'} />
                               {patient.medsDue > 0 && (
-                                <Chip
-                                    size="small"
-                                    variant="outlined"
-                                    color="warning"
-                                    icon={<MedicationIcon sx={{ fontSize: 16 }} />}
-                                    label={`${patient.medsDue} dosis pendientes`}
+                                <Box
+                                  sx={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    bgcolor: '#ff9800',
+                                    boxShadow: '0 0 4px rgba(255, 152, 0, 0.6)',
+                                  }}
+                                  title={`${patient.medsDue} dosis pendientes`}
                                 />
                               )}
                             </Stack>

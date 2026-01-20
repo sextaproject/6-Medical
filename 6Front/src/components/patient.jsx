@@ -3,7 +3,8 @@ import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { 
   Typography, styled, Paper, Container, Box, Grid, Button, TextField, 
   Chip, Stack, Divider, List, ListItem, ListItemText, Avatar, 
-  IconButton, Modal, Fade, Backdrop, InputAdornment, CircularProgress
+  IconButton, Modal, Fade, Backdrop, InputAdornment, CircularProgress,
+  Autocomplete
 } from '@mui/material';
 import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
@@ -119,6 +120,13 @@ function ClinicalDashboard() {
   const [showAddMedicine, setShowAddMedicine] = useState(false);
   const [newMedicine, setNewMedicine] = useState({ name: '', dose: '', route: 'VO', freq: '' });
   const [showDischargeConfirm, setShowDischargeConfirm] = useState(false);
+  
+  // Medicine history from localStorage
+  const [medicineHistory, setMedicineHistory] = useState({
+    names: [],
+    doses: [],
+    frequencies: []
+  });
   const [editingNote, setEditingNote] = useState(null);
   const [editNoteContent, setEditNoteContent] = useState('');
   const [editNoteTitle, setEditNoteTitle] = useState('');
@@ -126,6 +134,9 @@ function ClinicalDashboard() {
   const [showEditPatientModal, setShowEditPatientModal] = useState(false);
   const [editingPatient, setEditingPatient] = useState(null);
   const [updatingPatient, setUpdatingPatient] = useState(false);
+  const [showEditMedicineModal, setShowEditMedicineModal] = useState(false);
+  const [editingMedicine, setEditingMedicine] = useState(null);
+  const [updatingMedicine, setUpdatingMedicine] = useState(false);
 
   // --- API Calls ---
 
@@ -173,6 +184,16 @@ function ClinicalDashboard() {
         console.error('Error parsing user_info:', error);
       }
     }
+    
+    // Load medicine history from localStorage
+    const savedNames = JSON.parse(localStorage.getItem('medicine_names') || '[]');
+    const savedDoses = JSON.parse(localStorage.getItem('medicine_doses') || '[]');
+    const savedFrequencies = JSON.parse(localStorage.getItem('medicine_frequencies') || '[]');
+    setMedicineHistory({
+      names: savedNames,
+      doses: savedDoses,
+      frequencies: savedFrequencies
+    });
   }, [id]);
 
   useEffect(() => {
@@ -351,6 +372,43 @@ function ClinicalDashboard() {
             medications: [...prev.medications, response.data]
         }));
         
+        // Save to medicine history (localStorage)
+        const medicineName = newMedicine.name.trim();
+        const medicineDose = newMedicine.dose.trim();
+        const medicineFreq = newMedicine.freq.trim();
+        
+        // Update names history
+        const updatedNames = [...medicineHistory.names];
+        if (!updatedNames.includes(medicineName)) {
+          updatedNames.unshift(medicineName);
+          // Keep only last 50 entries
+          if (updatedNames.length > 50) updatedNames.pop();
+          localStorage.setItem('medicine_names', JSON.stringify(updatedNames));
+        }
+        
+        // Update doses history
+        const updatedDoses = [...medicineHistory.doses];
+        if (!updatedDoses.includes(medicineDose)) {
+          updatedDoses.unshift(medicineDose);
+          if (updatedDoses.length > 30) updatedDoses.pop();
+          localStorage.setItem('medicine_doses', JSON.stringify(updatedDoses));
+        }
+        
+        // Update frequencies history
+        const updatedFrequencies = [...medicineHistory.frequencies];
+        if (!updatedFrequencies.includes(medicineFreq)) {
+          updatedFrequencies.unshift(medicineFreq);
+          if (updatedFrequencies.length > 30) updatedFrequencies.pop();
+          localStorage.setItem('medicine_frequencies', JSON.stringify(updatedFrequencies));
+        }
+        
+        // Update state
+        setMedicineHistory({
+          names: updatedNames.slice(0, 50),
+          doses: updatedDoses.slice(0, 30),
+          frequencies: updatedFrequencies.slice(0, 30)
+        });
+        
         addToSessionHistory('NOTE', `Nuevo medicamento: ${newMedicine.name}`);
         setNewMedicine({ name: '', dose: '', route: 'VO', freq: '' });
         setShowAddMedicine(false);
@@ -368,9 +426,77 @@ function ClinicalDashboard() {
               ...prev,
               medications: prev.medications.filter(m => m.id !== medId)
           }));
+          addToSessionHistory('MED', 'Medicamento eliminado');
       } catch (error) {
           console.error(error);
+          alert("Error al eliminar medicamento");
       }
+  };
+
+  const handleEditMedicineOpen = (med) => {
+    setEditingMedicine({
+      id: med.id,
+      name: med.name || '',
+      dose: med.dose || '',
+      route: med.route || 'VO',
+      freq: med.freq || '',
+    });
+    setShowEditMedicineModal(true);
+  };
+
+  const handleEditMedicineChange = (field) => (e) => {
+    const value = e.target.value;
+    setEditingMedicine(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleUpdateMedicine = async () => {
+    if (!editingMedicine) return;
+    
+    // Validation
+    if (!editingMedicine.name || !editingMedicine.name.trim()) {
+      alert('El nombre del medicamento es requerido.');
+      return;
+    }
+    if (!editingMedicine.dose || !editingMedicine.dose.trim()) {
+      alert('La dosis es requerida.');
+      return;
+    }
+    if (!editingMedicine.freq || !editingMedicine.freq.trim()) {
+      alert('La frecuencia es requerida.');
+      return;
+    }
+    
+    setUpdatingMedicine(true);
+    
+    try {
+      const response = await axiosInstance.patch(`medications/${editingMedicine.id}/`, {
+        name: editingMedicine.name.trim(),
+        dose: editingMedicine.dose.trim(),
+        route: editingMedicine.route,
+        freq: editingMedicine.freq.trim(),
+      });
+      
+      // Update medication in local state
+      setPatient(prev => ({
+        ...prev,
+        medications: prev.medications.map(m => 
+          m.id === editingMedicine.id ? response.data : m
+        )
+      }));
+      
+      addToSessionHistory('MED', `Medicamento actualizado: ${editingMedicine.name}`);
+      setShowEditMedicineModal(false);
+      setEditingMedicine(null);
+    } catch (error) {
+      console.error('Error updating medicine:', error);
+      if (error.response?.status === 403) {
+        alert('No tiene permisos para editar medicamentos.');
+      } else {
+        alert(error.response?.data?.detail || 'Error al actualizar medicamento.');
+      }
+    } finally {
+      setUpdatingMedicine(false);
+    }
   };
 
   const handleDischargePatient = async () => {
@@ -933,8 +1059,19 @@ function ClinicalDashboard() {
                         <Typography variant="h6" fontWeight="bold">{med.name}</Typography>
                         <Typography variant="body2" color="text.secondary">{med.dose} • {med.route} • {med.freq}</Typography>
                       </Box>
-                      <Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                         {med.status === 'given' && <CheckCircleIcon color="success" />}
+                        {currentUser?.is_superuser && (
+                          <Tooltip title="Editar medicamento">
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleEditMedicineOpen(med)} 
+                              sx={{ color: '#3b82f6' }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         <IconButton size="small" onClick={() => handleDeleteMedicine(med.id)} sx={{ color: '#ef4444' }}><DeleteIcon fontSize="small" /></IconButton>
                       </Box>
                     </Box>
@@ -968,23 +1105,47 @@ function ClinicalDashboard() {
             <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 400, bgcolor: 'background.paper', borderRadius: 4, p: 4 }}>
                 <Typography variant="h6" mb={2}>Agregar Medicamento</Typography>
                 <Stack spacing={2}>
-                    <TextField 
-                      label="Nombre" 
-                      fullWidth 
-                      required
-                      value={newMedicine.name} 
-                      onChange={(e) => setNewMedicine({...newMedicine, name: e.target.value})}
-                      error={!newMedicine.name || !newMedicine.name.trim()}
-                      helperText={(!newMedicine.name || !newMedicine.name.trim()) ? 'El nombre del medicamento es requerido' : ''}
+                    <Autocomplete
+                      freeSolo
+                      options={medicineHistory.names}
+                      value={newMedicine.name}
+                      onInputChange={(event, newValue) => {
+                        setNewMedicine({...newMedicine, name: newValue});
+                      }}
+                      onChange={(event, newValue) => {
+                        setNewMedicine({...newMedicine, name: newValue || ''});
+                      }}
+                      renderInput={(params) => (
+                        <TextField 
+                          {...params}
+                          label="Nombre" 
+                          fullWidth 
+                          required
+                          error={!newMedicine.name || !newMedicine.name.trim()}
+                          helperText={(!newMedicine.name || !newMedicine.name.trim()) ? 'El nombre del medicamento es requerido' : 'Escriba o seleccione de anteriores'}
+                        />
+                      )}
                     />
-                    <TextField 
-                      label="Dosis" 
-                      fullWidth 
-                      required
-                      value={newMedicine.dose} 
-                      onChange={(e) => setNewMedicine({...newMedicine, dose: e.target.value})}
-                      error={!newMedicine.dose || !newMedicine.dose.trim()}
-                      helperText={(!newMedicine.dose || !newMedicine.dose.trim()) ? 'La dosis es requerida' : ''}
+                    <Autocomplete
+                      freeSolo
+                      options={medicineHistory.doses}
+                      value={newMedicine.dose}
+                      onInputChange={(event, newValue) => {
+                        setNewMedicine({...newMedicine, dose: newValue});
+                      }}
+                      onChange={(event, newValue) => {
+                        setNewMedicine({...newMedicine, dose: newValue || ''});
+                      }}
+                      renderInput={(params) => (
+                        <TextField 
+                          {...params}
+                          label="Dosis" 
+                          fullWidth 
+                          required
+                          error={!newMedicine.dose || !newMedicine.dose.trim()}
+                          helperText={(!newMedicine.dose || !newMedicine.dose.trim()) ? 'La dosis es requerida' : 'Escriba o seleccione de anteriores'}
+                        />
+                      )}
                     />
                     <TextField 
                       select
@@ -1000,14 +1161,26 @@ function ClinicalDashboard() {
                       <option value="SC">Subcutáneo</option>
                       <option value="TOP">Tópico</option>
                     </TextField>
-                    <TextField 
-                      label="Frecuencia" 
-                      fullWidth 
-                      required
-                      value={newMedicine.freq} 
-                      onChange={(e) => setNewMedicine({...newMedicine, freq: e.target.value})}
-                      error={!newMedicine.freq || !newMedicine.freq.trim()}
-                      helperText={(!newMedicine.freq || !newMedicine.freq.trim()) ? 'La frecuencia es requerida' : ''}
+                    <Autocomplete
+                      freeSolo
+                      options={medicineHistory.frequencies}
+                      value={newMedicine.freq}
+                      onInputChange={(event, newValue) => {
+                        setNewMedicine({...newMedicine, freq: newValue});
+                      }}
+                      onChange={(event, newValue) => {
+                        setNewMedicine({...newMedicine, freq: newValue || ''});
+                      }}
+                      renderInput={(params) => (
+                        <TextField 
+                          {...params}
+                          label="Frecuencia" 
+                          fullWidth 
+                          required
+                          error={!newMedicine.freq || !newMedicine.freq.trim()}
+                          helperText={(!newMedicine.freq || !newMedicine.freq.trim()) ? 'La frecuencia es requerida' : 'Escriba o seleccione de anteriores (ej: Cada 8 horas, 2 veces al día)'}
+                        />
+                      )}
                     />
                     <Button 
                       variant="contained" 
@@ -1017,6 +1190,126 @@ function ClinicalDashboard() {
                       Guardar
                     </Button>
                 </Stack>
+            </Box>
+          </Fade>
+        </Modal>
+
+        {/* Edit Medicine Modal */}
+        <Modal open={showEditMedicineModal} onClose={() => {
+          setShowEditMedicineModal(false);
+          setEditingMedicine(null);
+        }} closeAfterTransition slots={{ backdrop: Backdrop }} slotProps={{ backdrop: { timeout: 300 } }}>
+          <Fade in={showEditMedicineModal}>
+            <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 400, bgcolor: 'background.paper', borderRadius: 4, p: 4 }}>
+                <Typography variant="h6" mb={2}>Editar Medicamento</Typography>
+                {editingMedicine && (
+                  <Stack spacing={2}>
+                      <Autocomplete
+                        freeSolo
+                        options={medicineHistory.names}
+                        value={editingMedicine.name}
+                        onInputChange={(event, newValue) => {
+                          setEditingMedicine({...editingMedicine, name: newValue});
+                        }}
+                        onChange={(event, newValue) => {
+                          setEditingMedicine({...editingMedicine, name: newValue || ''});
+                        }}
+                        renderInput={(params) => (
+                          <TextField 
+                            {...params}
+                            label="Nombre" 
+                            fullWidth 
+                            required
+                            error={!editingMedicine.name || !editingMedicine.name.trim()}
+                            helperText={(!editingMedicine.name || !editingMedicine.name.trim()) ? 'El nombre del medicamento es requerido' : 'Escriba o seleccione de anteriores'}
+                          />
+                        )}
+                      />
+                      <Autocomplete
+                        freeSolo
+                        options={medicineHistory.doses}
+                        value={editingMedicine.dose}
+                        onInputChange={(event, newValue) => {
+                          setEditingMedicine({...editingMedicine, dose: newValue});
+                        }}
+                        onChange={(event, newValue) => {
+                          setEditingMedicine({...editingMedicine, dose: newValue || ''});
+                        }}
+                        renderInput={(params) => (
+                          <TextField 
+                            {...params}
+                            label="Dosis" 
+                            fullWidth 
+                            required
+                            error={!editingMedicine.dose || !editingMedicine.dose.trim()}
+                            helperText={(!editingMedicine.dose || !editingMedicine.dose.trim()) ? 'La dosis es requerida' : 'Escriba o seleccione de anteriores'}
+                          />
+                        )}
+                      />
+                      <TextField 
+                        select
+                        label="Vía" 
+                        fullWidth 
+                        value={editingMedicine.route} 
+                        onChange={(e) => setEditingMedicine({...editingMedicine, route: e.target.value})}
+                        SelectProps={{ native: true }}
+                      >
+                        <option value="VO">Vía Oral</option>
+                        <option value="IV">Intravenoso</option>
+                        <option value="IM">Intramuscular</option>
+                        <option value="SC">Subcutáneo</option>
+                        <option value="TOP">Tópico</option>
+                      </TextField>
+                      <Autocomplete
+                        freeSolo
+                        options={medicineHistory.frequencies}
+                        value={editingMedicine.freq}
+                        onInputChange={(event, newValue) => {
+                          setEditingMedicine({...editingMedicine, freq: newValue});
+                        }}
+                        onChange={(event, newValue) => {
+                          setEditingMedicine({...editingMedicine, freq: newValue || ''});
+                        }}
+                        renderInput={(params) => (
+                          <TextField 
+                            {...params}
+                            label="Frecuencia" 
+                            fullWidth 
+                            required
+                            error={!editingMedicine.freq || !editingMedicine.freq.trim()}
+                            helperText={(!editingMedicine.freq || !editingMedicine.freq.trim()) ? 'La frecuencia es requerida' : 'Escriba o seleccione de anteriores'}
+                          />
+                        )}
+                      />
+                      <Stack direction="row" spacing={2}>
+                        <Button 
+                          variant="outlined" 
+                          onClick={() => {
+                            setShowEditMedicineModal(false);
+                            setEditingMedicine(null);
+                          }}
+                          fullWidth
+                        >
+                          Cancelar
+                        </Button>
+                        <Button 
+                          variant="contained" 
+                          onClick={handleUpdateMedicine}
+                          disabled={updatingMedicine || !editingMedicine.name?.trim() || !editingMedicine.dose?.trim() || !editingMedicine.freq?.trim()}
+                          fullWidth
+                        >
+                          {updatingMedicine ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <CircularProgress size={16} color="inherit" />
+                              Actualizando...
+                            </Box>
+                          ) : (
+                            'Guardar Cambios'
+                          )}
+                        </Button>
+                      </Stack>
+                  </Stack>
+                )}
             </Box>
           </Fade>
         </Modal>
