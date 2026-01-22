@@ -4,7 +4,7 @@ import {
   Typography, styled, Paper, Container, Box, Grid, Button, TextField, 
   Chip, Stack, Divider, List, ListItem, ListItemText, Avatar, 
   IconButton, Modal, Fade, Backdrop, InputAdornment, CircularProgress,
-  Autocomplete
+  Autocomplete, Snackbar, Alert
 } from '@mui/material';
 import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
 import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
@@ -37,6 +37,7 @@ import femaleAvatar2 from '../assets/f2.png';
 
 // API
 import axiosInstance from '../api/axios';
+import { showError, showSuccess, handleApiError } from '../utils/errorHandler';
 
 const MALE_AVATARS = [maleAvatar1, maleAvatar2, maleAvatar3];
 const FEMALE_AVATARS = [femaleAvatar1, femaleAvatar2];
@@ -137,6 +138,7 @@ function ClinicalDashboard() {
   const [showEditMedicineModal, setShowEditMedicineModal] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState(null);
   const [updatingMedicine, setUpdatingMedicine] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   // --- API Calls ---
 
@@ -166,7 +168,11 @@ function ClinicalDashboard() {
         medicalNotes: data.medical_notes || [],
       });
     } catch (error) {
-      console.error("Error fetching patient:", error);
+      // Error handling - log only in development
+      if (import.meta.env.DEV) {
+        console.error("Error fetching patient:", error);
+      }
+      handleApiError(error, setSnackbar, 'Error al cargar datos del paciente.');
     } finally {
       setLoading(false);
     }
@@ -181,7 +187,12 @@ function ClinicalDashboard() {
       try {
         setCurrentUser(JSON.parse(userInfo));
       } catch (error) {
-        console.error('Error parsing user_info:', error);
+        // Error parsing user info - log only in development
+        if (import.meta.env.DEV) {
+          console.error('Error parsing user_info:', error);
+        }
+        // Clear invalid user info
+        localStorage.removeItem('user_info');
       }
     }
     
@@ -222,7 +233,10 @@ function ClinicalDashboard() {
           }));
         setNavPatients(formattedPatients);
       } catch (error) {
-        console.error("Error fetching patients list:", error);
+        // Error handling - log only in development
+        if (import.meta.env.DEV) {
+          console.error("Error fetching patients list:", error);
+        }
       }
     };
 
@@ -275,9 +289,9 @@ function ClinicalDashboard() {
         }));
 
         addToSessionHistory('MED', `Administrado por ${historyItem.administered_by}`);
+        showSuccess('Medicamento administrado exitosamente', setSnackbar);
     } catch (error) {
-        console.error(error);
-        alert("Error al registrar administración.");
+        handleApiError(error, setSnackbar, 'Error al registrar administración.');
     }
   };
 
@@ -287,29 +301,29 @@ function ClinicalDashboard() {
     // Validate word count
     const wordCount = note.trim() ? note.trim().split(/\s+/).length : 0;
     if (wordCount > 2000) {
-      alert('La nota no puede exceder 2000 palabras. Por favor, reduzca el contenido.');
+      showError('La nota no puede exceder 2000 palabras. Por favor, reduzca el contenido.', setSnackbar);
       return;
     }
     
     // Validate vital signs ranges
     if (vitals.bp.sbp && (parseInt(vitals.bp.sbp) < 0 || parseInt(vitals.bp.sbp) > 300)) {
-      alert('La presión arterial sistólica debe estar entre 0 y 300 mmHg.');
+      showError('La presión arterial sistólica debe estar entre 0 y 300 mmHg.', setSnackbar);
       return;
     }
     if (vitals.bp.dbp && (parseInt(vitals.bp.dbp) < 0 || parseInt(vitals.bp.dbp) > 200)) {
-      alert('La presión arterial diastólica debe estar entre 0 y 200 mmHg.');
+      showError('La presión arterial diastólica debe estar entre 0 y 200 mmHg.', setSnackbar);
       return;
     }
     if (vitals.hr && (parseInt(vitals.hr) < 0 || parseInt(vitals.hr) > 220)) {
-      alert('La frecuencia cardíaca debe estar entre 0 y 220 bpm.');
+      showError('La frecuencia cardíaca debe estar entre 0 y 220 bpm.', setSnackbar);
       return;
     }
     if (vitals.fr && (parseInt(vitals.fr) < 0 || parseInt(vitals.fr) > 60)) {
-      alert('La frecuencia respiratoria debe estar entre 0 y 60 rpm.');
+      showError('La frecuencia respiratoria debe estar entre 0 y 60 rpm.', setSnackbar);
       return;
     }
     if (vitals.temp && (parseFloat(vitals.temp) < 30 || parseFloat(vitals.temp) > 45)) {
-      alert('La temperatura debe estar entre 30 y 45°C.');
+      showError('La temperatura debe estar entre 30 y 45°C.', setSnackbar);
       return;
     }
     
@@ -337,24 +351,24 @@ function ClinicalDashboard() {
         addToSessionHistory('NOTE', `Nota guardada exitosamente`);
         setVitals({ bp: { sbp: '', dbp: '' }, hr: '', fr: '', temp: '' });
         setNote('');
+        showSuccess('Nota guardada exitosamente', setSnackbar);
     } catch (error) {
-        console.error(error);
-        alert("Error al guardar nota.");
+        handleApiError(error, setSnackbar, 'Error al guardar nota.');
     }
   };
 
   const handleAddMedicine = async () => {
     // Validation
     if (!newMedicine.name || !newMedicine.name.trim()) {
-      alert('El nombre del medicamento es requerido.');
+      showError('El nombre del medicamento es requerido.', setSnackbar);
       return;
     }
     if (!newMedicine.dose || !newMedicine.dose.trim()) {
-      alert('La dosis es requerida.');
+      showError('La dosis es requerida.', setSnackbar);
       return;
     }
     if (!newMedicine.freq || !newMedicine.freq.trim()) {
-      alert('La frecuencia es requerida.');
+      showError('La frecuencia es requerida.', setSnackbar);
       return;
     }
     
@@ -412,8 +426,9 @@ function ClinicalDashboard() {
         addToSessionHistory('NOTE', `Nuevo medicamento: ${newMedicine.name}`);
         setNewMedicine({ name: '', dose: '', route: 'VO', freq: '' });
         setShowAddMedicine(false);
+        showSuccess(`Medicamento "${newMedicine.name}" agregado exitosamente`, setSnackbar);
     } catch (error) {
-        alert("Error agregando medicamento");
+        handleApiError(error, setSnackbar, 'Error al agregar medicamento.');
     }
   };
 
@@ -427,9 +442,9 @@ function ClinicalDashboard() {
               medications: prev.medications.filter(m => m.id !== medId)
           }));
           addToSessionHistory('MED', 'Medicamento eliminado');
+          showSuccess('Medicamento eliminado exitosamente', setSnackbar);
       } catch (error) {
-          console.error(error);
-          alert("Error al eliminar medicamento");
+          handleApiError(error, setSnackbar, 'Error al eliminar medicamento.');
       }
   };
 
@@ -454,15 +469,15 @@ function ClinicalDashboard() {
     
     // Validation
     if (!editingMedicine.name || !editingMedicine.name.trim()) {
-      alert('El nombre del medicamento es requerido.');
+      showError('El nombre del medicamento es requerido.', setSnackbar);
       return;
     }
     if (!editingMedicine.dose || !editingMedicine.dose.trim()) {
-      alert('La dosis es requerida.');
+      showError('La dosis es requerida.', setSnackbar);
       return;
     }
     if (!editingMedicine.freq || !editingMedicine.freq.trim()) {
-      alert('La frecuencia es requerida.');
+      showError('La frecuencia es requerida.', setSnackbar);
       return;
     }
     
@@ -487,13 +502,9 @@ function ClinicalDashboard() {
       addToSessionHistory('MED', `Medicamento actualizado: ${editingMedicine.name}`);
       setShowEditMedicineModal(false);
       setEditingMedicine(null);
+      showSuccess(`Medicamento "${editingMedicine.name}" actualizado exitosamente`, setSnackbar);
     } catch (error) {
-      console.error('Error updating medicine:', error);
-      if (error.response?.status === 403) {
-        alert('No tiene permisos para editar medicamentos.');
-      } else {
-        alert(error.response?.data?.detail || 'Error al actualizar medicamento.');
-      }
+      handleApiError(error, setSnackbar, 'Error al actualizar medicamento.');
     } finally {
       setUpdatingMedicine(false);
     }
@@ -505,8 +516,9 @@ function ClinicalDashboard() {
         setPatient(prev => ({ ...prev, isDischarged: true, status: 'Alta' }));
         setShowDischargeConfirm(false);
         addToSessionHistory('NOTE', `Paciente dado de alta`);
+        showSuccess('Paciente dado de alta exitosamente', setSnackbar);
     } catch (error) {
-        alert("Error al dar de alta.");
+        handleApiError(error, setSnackbar, 'Error al dar de alta al paciente.');
     }
   };
 
@@ -570,13 +582,9 @@ function ClinicalDashboard() {
       setEditNoteTitle('');
       setEditNoteContent('');
       addToSessionHistory('NOTE', 'Nota actualizada exitosamente');
+      showSuccess('Nota actualizada exitosamente', setSnackbar);
     } catch (error) {
-      console.error('Error updating note:', error);
-      if (error.response?.status === 403) {
-        alert('No tiene permisos para editar esta nota.');
-      } else {
-        alert('Error al actualizar la nota.');
-      }
+      handleApiError(error, setSnackbar, 'Error al actualizar la nota.');
     }
   };
 
@@ -624,8 +632,7 @@ function ClinicalDashboard() {
       });
       setShowEditPatientModal(true);
     } catch (err) {
-      console.error('Error fetching patient data:', err);
-      alert('Error al cargar datos del paciente.');
+      handleApiError(err, setSnackbar, 'Error al cargar datos del paciente.');
     }
   };
 
@@ -646,23 +653,23 @@ function ClinicalDashboard() {
     
     // Validation
     if (!editingPatient.nombre || !editingPatient.nombre.trim()) {
-      alert('El nombre completo es requerido.');
+      showError('El nombre completo es requerido.', setSnackbar);
       return;
     }
     if (!editingPatient.cc || editingPatient.cc.length < 7 || editingPatient.cc.length > 20) {
-      alert('La cédula de ciudadanía es requerida (7-20 dígitos).');
+      showError('La cédula de ciudadanía es requerida (7-20 dígitos).', setSnackbar);
       return;
     }
     if (!editingPatient.fechaNacimiento && (!editingPatient.edad || parseInt(editingPatient.edad) < 0 || parseInt(editingPatient.edad) > 150)) {
-      alert('Debe proporcionar fecha de nacimiento o edad válida (0-150 años).');
+      showError('Debe proporcionar fecha de nacimiento o edad válida (0-150 años).', setSnackbar);
       return;
     }
     if (editingPatient.edad && (parseInt(editingPatient.edad) < 0 || parseInt(editingPatient.edad) > 150)) {
-      alert('La edad debe estar entre 0 y 150 años.');
+      showError('La edad debe estar entre 0 y 150 años.', setSnackbar);
       return;
     }
     if (!editingPatient.eps || !editingPatient.eps.trim()) {
-      alert('La EPS es requerida.');
+      showError('La EPS es requerida.', setSnackbar);
       return;
     }
     
@@ -703,13 +710,9 @@ function ClinicalDashboard() {
       setShowEditPatientModal(false);
       setEditingPatient(null);
       addToSessionHistory('INFO', `Información del paciente actualizada por ${currentUser?.username || 'usuario'}`);
+      showSuccess('Información del paciente actualizada exitosamente', setSnackbar);
     } catch (err) {
-      console.error('Error updating patient:', err);
-      if (err.response?.status === 403) {
-        alert('No tiene permisos para editar pacientes.');
-      } else {
-        alert(err.response?.data?.detail || 'Error al actualizar paciente.');
-      }
+      handleApiError(err, setSnackbar, 'Error al actualizar paciente.');
     } finally {
       setUpdatingPatient(false);
     }
@@ -1739,6 +1742,22 @@ function ClinicalDashboard() {
             </Box>
           </Fade>
         </Modal>
+
+        {/* Snackbar for notifications */}
+        <Snackbar 
+          open={snackbar.open} 
+          autoHideDuration={4000} 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert 
+            onClose={() => setSnackbar({ ...snackbar, open: false })} 
+            severity={snackbar.severity} 
+            sx={{ width: '100%', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}
+          >
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
 
       </Container>
     </Box>

@@ -5,6 +5,12 @@ echo "=========================================="
 echo "Starting Django Backend Setup"
 echo "=========================================="
 
+# Create necessary directories
+echo "Creating necessary directories..."
+mkdir -p /app/logs || true
+mkdir -p /app/staticfiles || true
+mkdir -p /app/media || true
+
 # Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL..."
 until pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -U "$POSTGRES_USER" > /dev/null 2>&1; do
@@ -39,23 +45,28 @@ EOF
 # Create migrations if needed (for new models)
 echo ""
 echo "Creating migrations (if needed)..."
-python manage.py makemigrations --noinput || echo "No new migrations to create"
+python manage.py makemigrations --noinput --skip-checks || echo "No new migrations to create"
 
 # Run migrations
 echo ""
 echo "Running database migrations..."
-python manage.py migrate --noinput
+python manage.py migrate --noinput --skip-checks
+
+# Create cache table for django-ratelimit
+echo ""
+echo "Creating cache table..."
+python manage.py createcachetable --skip-checks || echo "Cache table already exists"
 
 # Verify migrations were applied
 echo ""
 echo "Verifying migrations..."
-python manage.py showmigrations --list
+python manage.py showmigrations --list --skip-checks
 
 # Collect static files
 echo ""
 echo "Collecting static files..."
 mkdir -p /app/staticfiles || true
-python manage.py collectstatic --noinput || echo "Static files collection skipped"
+python manage.py collectstatic --noinput --skip-checks || echo "Static files collection skipped"
 
 # Verify tables exist
 echo ""

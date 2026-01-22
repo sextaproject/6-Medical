@@ -10,7 +10,10 @@ This command creates:
     3. Test Nurse: Nurse (password: nurse)
     4. Nurse: albayasminlopezsanchez51@gmail.com (password: 10006531361)
     5. Nurse: deykerraulavila@gmail.com (password: 1697369)
+
+NOTE: Default passwords are for initial setup only. Change all passwords in production!
 """
+import os
 from django.core.management.base import BaseCommand
 from django.contrib.auth.models import User
 
@@ -23,14 +26,17 @@ class Command(BaseCommand):
         
         # 1. Create/Update SUPERUSER: willarevalo
         username_superuser = 'willarevalo'
+        superuser_password = os.getenv('SUPERUSER_PASSWORD', 'willarevalo123')  # Use env var or default
+        
         if User.objects.filter(username=username_superuser).exists():
             superuser = User.objects.get(username=username_superuser)
-            self.stdout.write(self.style.WARNING(f'User "{username_superuser}" already exists. Updating...'))
+            superuser.set_password(superuser_password)
+            self.stdout.write(self.style.WARNING(f'User "{username_superuser}" already exists. Password updated.'))
         else:
             superuser = User.objects.create_user(
                 username=username_superuser,
                 email='willarevalo@example.com',
-                password='willarevalo123'  # Change this password in production!
+                password=superuser_password
             )
             self.stdout.write(self.style.SUCCESS(f'Created user "{username_superuser}"'))
         
@@ -38,6 +44,7 @@ class Command(BaseCommand):
         superuser.is_staff = True
         superuser.save()
         self.stdout.write(self.style.SUCCESS(f'✓ SUPERUSER "{username_superuser}" configured (full CRUD access)'))
+        self.stdout.write(self.style.WARNING(f'⚠️  Password set from SUPERUSER_PASSWORD env var or default. CHANGE IN PRODUCTION!'))
         
         # 2. Create Read-only user: Colin
         username_readonly = 'Colin'

@@ -3,6 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import Patient, Medication, MedicalNote, MedicationHistory, NoteEditHistory
@@ -51,6 +53,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom token view that includes user information"""
     serializer_class = CustomTokenObtainPairSerializer
+    
+    @method_decorator(ratelimit(key='ip', rate='5/m', method='POST'))
+    def post(self, request, *args, **kwargs):
+        """Rate limit login attempts to 5 per minute per IP"""
+        return super().post(request, *args, **kwargs)
 
 
 class PatientViewSet(viewsets.ModelViewSet):

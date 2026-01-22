@@ -51,7 +51,7 @@ export default function Login() {
                 setError('Respuesta del servidor inválida');
             }
         } catch (err) {
-            console.error('Login error:', err);
+            // Error handling - no console.log in production
             if (err.response) {
                 // Server responded with error
                 if (err.response.status === 401) {

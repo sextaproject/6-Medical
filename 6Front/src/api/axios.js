@@ -52,10 +52,10 @@ axiosInstance.interceptors.response.use(
 
                     return axiosInstance(originalRequest);
                 } catch (err) {
-                    console.log("Refresh token expired or invalid.");
-                    // Force logout
+                    // Refresh token expired or invalid - force logout
                     localStorage.removeItem('access_token');
                     localStorage.removeItem('refresh_token');
+                    localStorage.removeItem('user_info');
                     window.location.href = '/login';
                 }
             } else {

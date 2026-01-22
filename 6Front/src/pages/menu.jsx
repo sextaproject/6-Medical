@@ -153,7 +153,10 @@ function Menu() {
 
       setPatients(formattedPatients);
     } catch (err) {
-      console.error('API error:', err);
+      // Error handling - log only in development
+      if (import.meta.env.DEV) {
+        console.error('API error:', err);
+      }
       setError('Error conectando con el servidor. Verifique su conexión.');
     } finally {
       setLoading(false);

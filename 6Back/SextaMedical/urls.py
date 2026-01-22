@@ -10,4 +10,5 @@ urlpatterns = [
     path('api/', include('ClinicalH.urls')),
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('health/', include('health_check.urls')),  # Health check endpoint
 ]
