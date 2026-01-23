@@ -64,3 +64,141 @@ docker-compose run --rm backend sh -c "python manage.py migrate && python manage
 
 # To run setup_users command:
 # docker-compose run --rm backend python manage.py setup_users
+
+
+
+
+
+
+
+-------------------------
+DROPLET
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install required packages
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common git
+
+# Add Docker's official GPG key
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+
+# Add Docker repository
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Install Docker
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# Start and enable Docker
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Verify installation
+docker --version
+docker compose version
+
+git clone https://github.com/sextaproject/6-Medical.git
+
+cd 6-Medical
+-IMB3eCAMxJxJaU2hL2sLz6LCOyGWZB7EUVsYJq2pGsfYbqwtQjbmGXqHv2pf5--C1k
+
+# Create the .env file with production values
+cat > .env << 'EOF'
+# Database
+POSTGRES_DB=sexta_medical_db
+POSTGRES_USER=sexta_user
+POSTGRES_PASSWORD=YOUR_SECURE_DB_PASSWORD_HERE
+
+# Django
+SECRET_KEY=YOUR_VERY_LONG_RANDOM_SECRET_KEY_HERE
+DEBUG=False
+ALLOWED_HOSTS=YOUR_DOMAIN,www.YOUR_DOMAIN,localhost,127.0.0.1
+
+# CORS - Replace YOUR_DOMAIN with your actual domain
+CORS_ALLOWED_ORIGINS=http://YOUR_DOMAIN,https://YOUR_DOMAIN,http://www.YOUR_DOMAIN,https://www.YOUR_DOMAIN
+
+# API URL for Frontend - Replace YOUR_DOMAIN
+REACT_APP_API_URL=http://YOUR_DOMAIN/api
+
+# Optional: Enable HTTPS after setting up SSL
+USE_HTTPS=False
+EOF
+
+python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+
+mkdir -p backups
+chmod 755 backups
+
+
+# Build and start all containers
+docker compose up -d --build
+
+# Check containers are running
+docker compose ps
+
+# Check logs if needed
+docker compose logs -f
+
+
+
+
+
+# View logs
+docker compose logs -f
+
+# Restart services
+docker compose restart
+
+# Stop everything
+docker compose down
+
+# Stop and remove volumes (CAUTION: deletes data)
+docker compose down -v
+
+# Rebuild after code changes
+docker compose up -d --build
+
+scp /Users/willarevalo/Documents/VIRTUAL_SEXTA/6MEDICAL/backups/sexta_medical_backup_20260122_133805.sql root@138.197.25.166:/root/6MEDICAL/backups/
+138.197.25.166
+
+cd /root/6-Medical
+./6Back/restore_database.sh backups/sexta_medical_backup_20260122_133805.sql
+
+
+---
+cat > .env << 'EOF'
+# Database
+POSTGRES_DB=sexta_medical_db
+POSTGRES_USER=sexta_user
+POSTGRES_PASSWORD=Ars0.1.2.1
+
+# Django
+SECRET_KEY=-IMB3eCAMxJxJaU2hL2sLz6LCOyGWZB7EUVsYJq2pGsfYbqwtQjbmGXqHv2pf5--C1k  
+DEBUG=False
+ALLOWED_HOSTS=medical.sexta.app,www.medical.sexta.app,localhost,127.0.0.1,138.197.25.166
+                                                                                        
+# CORS
+CORS_ALLOWED_ORIGINS=http://medical.sexta.app,https://medical.sexta.app,http://www.medical.sexta.app,https://www.medical.sexta.app
+                                                                                                                                  
+# API URL for Frontend
+REACT_APP_API_URL=http://medical.sexta.app/api
+EOF
+
+
+docker compose logs backend --tail 100
+
+
+Requesting a certificate for medical.sexta.app
+
+Successfully received certificate.
+Certificate is saved at: /etc/letsencrypt/live/medical.sexta.app/fullchain.pem
+Key is saved at:         /etc/letsencrypt/live/medical.sexta.app/privkey.pem
+This certificate expires on 2026-04-22.
+These files will be updated when the certificate renews.
+Certbot has set up a scheduled task to automatically renew this certificate in the background.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+If you like Certbot, please consider supporting our work by:
+ * Donating to ISRG / Let's Encrypt:   https://letsencrypt.org/donate
+ * Donating to EFF:                    https://eff.org/donate-le
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
