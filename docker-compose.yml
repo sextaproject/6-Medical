@@ -60,6 +60,8 @@ services:
       args:
         - VITE_API_URL=${REACT_APP_API_URL:-http://localhost:8000/api}
     container_name: sexta_medical_frontend
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     ports:
       - "80:80"
     env_file:
