@@ -30,6 +30,8 @@ npm create vite@latest  -- --template react
 npm install react-router-dom
 
 
+git add -A && git commit -m "Fix backup script for docker compose v2" && git push
+
 npm run dev
 
 
