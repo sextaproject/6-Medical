@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
+from django.utils import timezone
+from datetime import timedelta
 from .models import Patient, Medication, MedicalNote, MedicationHistory, NoteEditHistory
 import re
 
@@ -45,14 +47,28 @@ class MedicalNoteSerializer(serializers.ModelSerializer):
     created_by_id = serializers.IntegerField(source='created_by.id', read_only=True)
     created_by_username = serializers.CharField(source='created_by.username', read_only=True)
     edit_history = NoteEditHistorySerializer(many=True, read_only=True)
+    evidence_photo_url = serializers.SerializerMethodField()
     
     class Meta:
         model = MedicalNote
         fields = [
             'id', 'note_type', 'title', 'content', 
             'doctor_name', 'created_by_id', 'created_by_username',
+            'evidence_photo', 'evidence_photo_url',
             'created_at', 'updated_at', 'edit_history'
         ]
+        extra_kwargs = {
+            'evidence_photo': {'write_only': True, 'required': False}
+        }
+    
+    def get_evidence_photo_url(self, obj):
+        """Return the full URL for the evidence photo if it exists"""
+        if obj.evidence_photo:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.evidence_photo.url)
+            return obj.evidence_photo.url
+        return None
     
     def validate_content(self, value):
         """Validar que el contenido no exceda 2000 palabras"""
@@ -75,16 +91,46 @@ class MedicationHistorySerializer(serializers.ModelSerializer):
 class PatientListSerializer(serializers.ModelSerializer):
     """Serializer simplificado para listado de pacientes"""
     meds_due = serializers.SerializerMethodField()
+    evolution_done = serializers.SerializerMethodField()
     
     class Meta:
         model = Patient
         fields = [
             'id', 'nombre', 'fecha_nacimiento', 'edad', 'genero', 'cc', 'room', 
-            'eps', 'status', 'meds_due', 'fecha_ingreso'
+            'eps', 'status', 'meds_due', 'fecha_ingreso', 'evolution_done'
         ]
     
     def get_meds_due(self, obj):
         return obj.medications.filter(status='due').count()
+    
+    def get_evolution_done(self, obj):
+        """
+        Check if patient has a clinical evolution note for the current shift.
+        Day Shift: 7:00 AM - 7:00 PM
+        Night Shift: 7:00 PM - 7:00 AM (next day)
+        """
+        now = timezone.localtime(timezone.now())
+        current_hour = now.hour
+        
+        # Calculate the start of the current shift
+        if 7 <= current_hour < 19:
+            # Day Shift (7am to 7pm)
+            shift_start = now.replace(hour=7, minute=0, second=0, microsecond=0)
+        else:
+            # Night Shift (7pm to 7am)
+            if current_hour >= 19:
+                # Example: 10 PM. Shift started today at 7 PM.
+                shift_start = now.replace(hour=19, minute=0, second=0, microsecond=0)
+            else:
+                # Example: 3 AM. Shift started yesterday at 7 PM.
+                shift_start = (now - timedelta(days=1)).replace(hour=19, minute=0, second=0, microsecond=0)
+        
+        # Check if a note exists since the shift started
+        # We consider VITALS, EVOLUTION, and GENERAL notes as valid evolution notes
+        return obj.medical_notes.filter(
+            created_at__gte=shift_start,
+            note_type__in=['VITALS', 'EVOLUTION', 'GENERAL']
+        ).exists()
 
 
 class PatientDetailSerializer(serializers.ModelSerializer):

@@ -27,6 +27,8 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import HomeIcon from '@mui/icons-material/Home';
 import Tooltip from '@mui/material/Tooltip';
 import EditIcon from '@mui/icons-material/Edit';
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
+import ImageIcon from '@mui/icons-material/Image';
 
 // Patient avatar images
 import maleAvatar1 from '../assets/m1.png';
@@ -139,6 +141,8 @@ function ClinicalDashboard() {
   const [editingMedicine, setEditingMedicine] = useState(null);
   const [updatingMedicine, setUpdatingMedicine] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [evidencePhoto, setEvidencePhoto] = useState(null);
+  const [evidencePhotoPreview, setEvidencePhotoPreview] = useState(null);
 
   // --- API Calls ---
 
@@ -296,7 +300,7 @@ function ClinicalDashboard() {
   };
 
   const handleSaveNote = async () => {
-    if (!note && !vitals.bp.sbp) return;
+    if (!note && !vitals.bp.sbp && !evidencePhoto) return;
     
     // Validate word count
     const wordCount = note.trim() ? note.trim().split(/\s+/).length : 0;
@@ -336,11 +340,28 @@ function ClinicalDashboard() {
     const fullContent = `${vitalsParts.join(' ')}\n${note}`.trim();
 
     try {
-        const response = await axiosInstance.post(`patients/${patient.id}/add_note/`, {
-            title: 'Nota de Evolución',
-            type: 'VITALS',
-            content: fullContent
-        });
+        let response;
+        
+        // Use FormData if there's an evidence photo
+        if (evidencePhoto) {
+            const formData = new FormData();
+            formData.append('title', 'Nota de Evolución');
+            formData.append('type', 'VITALS');
+            formData.append('content', fullContent);
+            formData.append('evidence_photo', evidencePhoto);
+            
+            response = await axiosInstance.post(`patients/${patient.id}/add_note/`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                }
+            });
+        } else {
+            response = await axiosInstance.post(`patients/${patient.id}/add_note/`, {
+                title: 'Nota de Evolución',
+                type: 'VITALS',
+                content: fullContent
+            });
+        }
         
         // Add to local list immediately
         setPatient(prev => ({
@@ -348,13 +369,42 @@ function ClinicalDashboard() {
             medicalNotes: [response.data, ...prev.medicalNotes]
         }));
         
-        addToSessionHistory('NOTE', `Nota guardada exitosamente`);
+        addToSessionHistory('NOTE', `Nota guardada exitosamente${evidencePhoto ? ' (con foto)' : ''}`);
         setVitals({ bp: { sbp: '', dbp: '' }, hr: '', fr: '', temp: '' });
         setNote('');
+        setEvidencePhoto(null);
+        setEvidencePhotoPreview(null);
         showSuccess('Nota guardada exitosamente', setSnackbar);
     } catch (error) {
         handleApiError(error, setSnackbar, 'Error al guardar nota.');
     }
+  };
+  
+  const handleEvidencePhotoChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        showError('La imagen no puede ser mayor a 10MB.', setSnackbar);
+        return;
+      }
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        showError('Solo se permiten imágenes (JPEG, PNG, GIF, WEBP).', setSnackbar);
+        return;
+      }
+      setEvidencePhoto(file);
+      setEvidencePhotoPreview(URL.createObjectURL(file));
+    }
+  };
+  
+  const handleRemoveEvidencePhoto = () => {
+    setEvidencePhoto(null);
+    if (evidencePhotoPreview) {
+      URL.revokeObjectURL(evidencePhotoPreview);
+    }
+    setEvidencePhotoPreview(null);
   };
 
   const handleAddMedicine = async () => {
@@ -1027,6 +1077,69 @@ function ClinicalDashboard() {
                 error={note.trim() && note.trim().split(/\s+/).length > 2000}
               />
               
+              {/* Evidence Photo Section */}
+              <Box sx={{ mb: 2 }}>
+                <input
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  style={{ display: 'none' }}
+                  id="evidence-photo-input"
+                  type="file"
+                  onChange={handleEvidencePhotoChange}
+                />
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <label htmlFor="evidence-photo-input">
+                    <Button
+                      variant="outlined"
+                      component="span"
+                      startIcon={<PhotoCameraIcon />}
+                      sx={{ 
+                        borderRadius: '12px', 
+                        textTransform: 'none',
+                        borderColor: evidencePhoto ? '#10b981' : 'divider',
+                        color: evidencePhoto ? '#10b981' : 'text.secondary',
+                      }}
+                    >
+                      {evidencePhoto ? 'Cambiar foto' : 'Adjuntar evidencia'}
+                    </Button>
+                  </label>
+                  {evidencePhoto && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Chip
+                        size="small"
+                        icon={<ImageIcon sx={{ fontSize: 16 }} />}
+                        label={evidencePhoto.name.length > 20 
+                          ? `${evidencePhoto.name.substring(0, 17)}...` 
+                          : evidencePhoto.name
+                        }
+                        onDelete={handleRemoveEvidencePhoto}
+                        sx={{ 
+                          bgcolor: '#e6f4ea', 
+                          color: '#1e8e3e',
+                          '& .MuiChip-deleteIcon': { color: '#1e8e3e' }
+                        }}
+                      />
+                    </Stack>
+                  )}
+                </Stack>
+                {evidencePhotoPreview && (
+                  <Box sx={{ mt: 2, position: 'relative', display: 'inline-block' }}>
+                    <img 
+                      src={evidencePhotoPreview} 
+                      alt="Vista previa" 
+                      style={{ 
+                        maxHeight: 150, 
+                        maxWidth: '100%', 
+                        borderRadius: 12,
+                        border: '2px solid #e0e0e0'
+                      }} 
+                    />
+                  </Box>
+                )}
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  Opcional: Adjunte foto de evidencia (pertenencias, procedimientos, etc.) - Max 10MB
+                </Typography>
+              </Box>
+              
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 4 }}>
                 <ActionButton onClick={handleSaveNote} startIcon={<SaveIcon />}>Guardar</ActionButton>
               </Box>
@@ -1428,6 +1541,26 @@ function ClinicalDashboard() {
                                                     <Typography variant="caption" display="block">{new Date(n.created_at).toLocaleString()}</Typography>
                                                     <Typography variant="body2">{n.content}</Typography>
                                                     <Typography variant="caption" color="primary">Dr. {n.created_by_username || n.doctor_name}</Typography>
+                                                    {n.evidence_photo_url && (
+                                                        <Box sx={{ mt: 1.5 }}>
+                                                            <Typography variant="caption" display="block" sx={{ mb: 0.5, color: 'text.secondary' }}>
+                                                                Evidencia fotográfica:
+                                                            </Typography>
+                                                            <a href={n.evidence_photo_url} target="_blank" rel="noopener noreferrer">
+                                                                <img 
+                                                                    src={n.evidence_photo_url} 
+                                                                    alt="Evidencia" 
+                                                                    style={{ 
+                                                                        maxHeight: 200, 
+                                                                        maxWidth: '100%', 
+                                                                        borderRadius: 8,
+                                                                        border: '2px solid #e0e0e0',
+                                                                        cursor: 'pointer'
+                                                                    }} 
+                                                                />
+                                                            </a>
+                                                        </Box>
+                                                    )}
                                                     {n.edit_history && n.edit_history.length > 0 && (
                                                         <Typography variant="caption" display="block" sx={{ mt: 1, color: 'text.secondary' }}>
                                                             Editado {n.edit_history.length} vez(es)

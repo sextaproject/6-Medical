@@ -183,7 +183,7 @@ class PatientViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def add_note(self, request, pk=None):
-        """Shortcut to add a note directly to a patient"""
+        """Shortcut to add a note directly to a patient. Supports file upload for evidence photos."""
         if is_readonly_user(request.user):
             return Response(
                 {'detail': 'No tiene permisos para crear notas.'},
@@ -191,17 +191,39 @@ class PatientViewSet(viewsets.ModelViewSet):
             )
         patient = self.get_object()
         
-        # We manually create the note to ensure the User is attached
-        note = MedicalNote.objects.create(
-            patient=patient,
-            created_by=request.user,  # <--- THE LOGGED IN USER
-            doctor_name=request.user.get_full_name() or request.user.username,
-            note_type=request.data.get('type', 'GENERAL'),
-            title=request.data.get('title', 'Nota General'),
-            content=request.data.get('content', '')
-        )
+        # Handle both JSON and multipart/form-data requests
+        note_data = {
+            'patient': patient,
+            'created_by': request.user,
+            'doctor_name': request.user.get_full_name() or request.user.username,
+            'note_type': request.data.get('type', 'GENERAL'),
+            'title': request.data.get('title', 'Nota General'),
+            'content': request.data.get('content', '')
+        }
         
-        return Response(MedicalNoteSerializer(note).data, status=status.HTTP_201_CREATED)
+        # Handle evidence photo if provided
+        evidence_photo = request.FILES.get('evidence_photo')
+        if evidence_photo:
+            # Validate file size (max 10MB)
+            if evidence_photo.size > 10 * 1024 * 1024:
+                return Response(
+                    {'detail': 'La imagen no puede ser mayor a 10MB.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            # Validate file type
+            allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+            if evidence_photo.content_type not in allowed_types:
+                return Response(
+                    {'detail': 'Solo se permiten imágenes (JPEG, PNG, GIF, WEBP).'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            note_data['evidence_photo'] = evidence_photo
+        
+        note = MedicalNote.objects.create(**note_data)
+        
+        # Pass request context for building absolute URLs
+        serializer = MedicalNoteSerializer(note, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class MedicationViewSet(viewsets.ModelViewSet):

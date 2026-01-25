@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
@@ -12,3 +14,7 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('health/', include('health_check.urls')),  # Health check endpoint
 ]
+
+# Serve media files in development and production (for Docker setup)
+# In production with high traffic, consider serving via Nginx instead
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

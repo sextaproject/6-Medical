@@ -36,6 +36,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import HomeIcon from '@mui/icons-material/Home';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 // Patient avatar images
 import maleAvatar1 from '../assets/m1.png';
@@ -148,7 +149,8 @@ function Menu() {
         eps: p.eps,
         status: p.status,
         medsDue: p.meds_due,
-        admissionDate: p.fecha_ingreso
+        admissionDate: p.fecha_ingreso,
+        evolutionDone: p.evolution_done
       }));
 
       setPatients(formattedPatients);
@@ -670,6 +672,7 @@ function Menu() {
                             </Stack>
                             <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                               <Chip size="small" color="primary" label={patient.status || 'Estable'} />
+                              {/* Orange dot: Medications pending */}
                               {patient.medsDue > 0 && (
                                 <Box
                                   sx={{
@@ -680,6 +683,19 @@ function Menu() {
                                     boxShadow: '0 0 4px rgba(255, 152, 0, 0.6)',
                                   }}
                                   title={`${patient.medsDue} dosis pendientes`}
+                                />
+                              )}
+                              {/* Green dot: Evolution note done for this shift */}
+                              {patient.evolutionDone && (
+                                <Box
+                                  sx={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: '50%',
+                                    bgcolor: '#10b981',
+                                    boxShadow: '0 0 4px rgba(16, 185, 129, 0.6)',
+                                  }}
+                                  title="Evolución del turno registrada"
                                 />
                               )}
                             </Stack>

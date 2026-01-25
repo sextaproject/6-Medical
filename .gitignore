@@ -4,6 +4,8 @@
 .env.*.local
 *.env
 !*.env.example
+BACKUP.TXT
+backups/
 
 # Python
 __pycache__/

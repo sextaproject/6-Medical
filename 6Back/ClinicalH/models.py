@@ -98,6 +98,7 @@ class MedicalNote(models.Model):
         ('MED', 'Medicación'),
         ('PROCEDURE', 'Procedimiento'),
         ('GENERAL', 'General'),
+        ('EVOLUTION', 'Evolución'),
     ]
     
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name='medical_notes')
@@ -107,6 +108,14 @@ class MedicalNote(models.Model):
     title = models.CharField(max_length=200, verbose_name="Título")
     content = models.TextField(verbose_name="Contenido")
     doctor_name = models.CharField(max_length=200, verbose_name="Por:")
+    
+    # Evidence photo for belongings, etc. (optional)
+    evidence_photo = models.ImageField(
+        upload_to='evidence_photos/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name="Evidencia Fotográfica"
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
