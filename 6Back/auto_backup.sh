@@ -8,10 +8,10 @@
 #   3. Optionally syncs to external storage (DigitalOcean Spaces/S3/local)
 #
 # Setup (run this ONCE on your droplet):
-#   chmod +x /root/6MEDICAL/6Back/auto_backup.sh
+#   chmod +x /root/6-Medical/6Back/auto_backup.sh
 #   crontab -e
 #   # Add this line for daily backup at 2 AM:
-#   0 2 * * * /root/6MEDICAL/6Back/auto_backup.sh >> /var/log/sexta_backup.log 2>&1
+#   0 2 * * * /root/6-Medical/6Back/auto_backup.sh >> /var/log/sexta_backup.log 2>&1
 #
 # =============================================================================
 
@@ -55,6 +55,16 @@ error_exit() {
     exit 1
 }
 
+# Auto-detect docker compose command (V1 vs V2)
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE="docker compose"
+else
+    echo "ERROR: Neither 'docker-compose' nor 'docker compose' found!"
+    exit 1
+fi
+
 # =============================================================================
 # Main Backup Process
 # =============================================================================
@@ -66,17 +76,17 @@ log "=============================================="
 # Create backup directory
 mkdir -p "$BACKUP_DIR"
 
-# Change to project root for docker-compose
+# Change to project root for docker compose
 cd "$PROJECT_ROOT"
 
 # Check if database container is running
-if ! docker-compose ps | grep -q "sexta_medical_db.*Up"; then
+if ! $DOCKER_COMPOSE ps | grep -q "sexta_medical_db.*running\|sexta_medical_db.*Up"; then
     error_exit "Database container is not running!"
 fi
 
 # Create the backup
 log "Creating database backup..."
-docker-compose exec -T db pg_dump -U sexta_user -d sexta_medical_db --clean --if-exists > "$BACKUP_FILE"
+$DOCKER_COMPOSE exec -T db pg_dump -U sexta_user -d sexta_medical_db --clean --if-exists > "$BACKUP_FILE"
 
 if [ ! -s "$BACKUP_FILE" ]; then
     rm -f "$BACKUP_FILE"
@@ -95,8 +105,8 @@ BACKUP_SIZE=$(du -h "$BACKUP_FILE_COMPRESSED" | cut -f1)
 log "✅ Backup created: $(basename $BACKUP_FILE_COMPRESSED) (${BACKUP_SIZE})"
 
 # Get record counts for logging
-PATIENT_COUNT=$(docker-compose exec -T db psql -U sexta_user -d sexta_medical_db -t -c "SELECT COUNT(*) FROM \"ClinicalH_patient\";" 2>/dev/null | tr -d ' ' || echo "?")
-NOTE_COUNT=$(docker-compose exec -T db psql -U sexta_user -d sexta_medical_db -t -c "SELECT COUNT(*) FROM \"ClinicalH_clinicalnote\";" 2>/dev/null | tr -d ' ' || echo "?")
+PATIENT_COUNT=$($DOCKER_COMPOSE exec -T db psql -U sexta_user -d sexta_medical_db -t -c "SELECT COUNT(*) FROM \"ClinicalH_patient\";" 2>/dev/null | tr -d ' ' || echo "?")
+NOTE_COUNT=$($DOCKER_COMPOSE exec -T db psql -U sexta_user -d sexta_medical_db -t -c "SELECT COUNT(*) FROM \"ClinicalH_clinicalnote\";" 2>/dev/null | tr -d ' ' || echo "?")
 
 log "📊 Backup contains: ${PATIENT_COUNT} patients, ${NOTE_COUNT} clinical notes"
 

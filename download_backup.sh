@@ -12,7 +12,7 @@ set -e
 
 # Configuration
 LOCAL_BACKUP_DIR="$(dirname "$0")/backups"
-REMOTE_BACKUP_DIR="/root/6MEDICAL/backups"
+REMOTE_BACKUP_DIR="/root/6-Medical/backups"
 
 if [ -z "$1" ]; then
     echo "=============================================="
@@ -47,7 +47,7 @@ if [ -z "$LATEST_BACKUP" ]; then
     echo "❌ No backups found on droplet!"
     echo ""
     echo "Run this on your droplet first:"
-    echo "  cd /root/6MEDICAL && ./6Back/auto_backup.sh"
+    echo "  cd /root/6-Medical && ./6Back/auto_backup.sh"
     exit 1
 fi
 
